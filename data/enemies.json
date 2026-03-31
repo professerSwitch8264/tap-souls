@@ -1,0 +1,235 @@
+{
+  "enemies": [
+    {
+      "id": "lizard_soldier",
+      "name": "LIZARD SOLDIER",
+      "hp": 200,
+      "damage": 15,
+      "hit_gap": 600,
+      "image_url": "lizard.png",
+      "flee_chance": 0.5,
+      "flee_difficulty": 3,
+      "dialogues": [
+        "\"...urgh...\"",
+        "\"...kill...me...\"",
+        "\"...no...escape...\""
+      ],
+      "pattern": [
+        {
+          "name": "SLASH",
+          "weight": 0.5,
+          "hits": 1,
+          "windUp": 800,
+          "dropDist": 200,
+          "heavy": false,
+          "cooldown": 2000,
+          "windUpImgs": [
+            "lizard.png"
+          ],
+          "activeImgs": [
+            "lizard.png"
+          ]
+        },
+        {
+          "name": "LUNGE",
+          "weight": 0.3,
+          "hits": 1,
+          "windUp": 1000,
+          "dropDist": 250,
+          "heavy": true,
+          "cooldown": 2500,
+          "windUpImgs": [
+            "lizard.png"
+          ],
+          "activeImgs": [
+            "lizard.png"
+          ]
+        },
+        {
+          "name": "DOUBLE_SLASH",
+          "weight": 0.2,
+          "hits": 2,
+          "windUp": 700,
+          "dropDist": 180,
+          "heavy": false,
+          "cooldown": 3000,
+          "windUpImgs": [
+            "lizard.png"
+          ],
+          "activeImgs": [
+            "lizard.png"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "armored_knight",
+      "name": "ARMORED KNIGHT",
+      "hp": 350,
+      "damage": 20,
+      "hit_gap": 500,
+      "image_url": "gundyr.png",
+      "flee_chance": 0.3,
+      "flee_difficulty": 7,
+      "dialogues": [
+        "\"NONE SHALL PASS.\"",
+        "\"YOUR JOURNEY ENDS HERE.\"",
+        "\"I WAS ONCE LIKE YOU, ASHEN ONE.\""
+      ],
+      "pattern": [
+        {
+          "name": "SHIELD_BASH",
+          "weight": 0.3,
+          "hits": 1,
+          "windUp": 600,
+          "dropDist": 150,
+          "heavy": true,
+          "cooldown": 1800,
+          "windUpImgs": [
+            "gundyr.png"
+          ],
+          "activeImgs": [
+            "gundyr.png"
+          ]
+        },
+        {
+          "name": "HEAVY_SWING",
+          "weight": 0.3,
+          "hits": 1,
+          "windUp": 1200,
+          "dropDist": 280,
+          "heavy": true,
+          "cooldown": 2800,
+          "windUpImgs": [
+            "gundyr.png"
+          ],
+          "activeImgs": [
+            "gundyr.png"
+          ]
+        },
+        {
+          "name": "COMBO_STRIKE",
+          "weight": 0.25,
+          "hits": 3,
+          "windUp": 500,
+          "dropDist": 160,
+          "heavy": false,
+          "cooldown": 3500,
+          "windUpImgs": [
+            "gundyr.png"
+          ],
+          "activeImgs": [
+            "gundyr.png"
+          ]
+        },
+        {
+          "name": "GUARD_BREAK",
+          "weight": 0.15,
+          "hits": 1,
+          "windUp": 400,
+          "dropDist": 120,
+          "heavy": false,
+          "cooldown": 1500,
+          "windUpImgs": [
+            "gundyr.png"
+          ],
+          "activeImgs": [
+            "gundyr.png"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "gundyr",
+      "name": "IUDEX GUNDYR",
+      "hp": 500,
+      "damage": 25,
+      "hit_gap": 500,
+      "image_url": "gundyr.png",
+      "flee_chance": 0,
+      "flee_difficulty": 0,
+      "dialogues": [
+        "\"...I SEE YOU, ASHEN ONE.\"",
+        "\"THERE IS NO ESCAPE FROM DESTINY.\"",
+        "\"WALK NO FURTHER, FOR COLD DEATH AWAITS.\""
+      ],
+      "pattern": [
+        {
+          "name": "HEAVY_SLAM",
+          "weight": 0.2,
+          "hits": 1,
+          "windUp": 1200,
+          "dropDist": 250,
+          "heavy": true,
+          "cooldown": 2500,
+          "windUpImgs": [
+            "gundyr.png"
+          ],
+          "activeImgs": [
+            "gundyr.png"
+          ]
+        },
+        {
+          "name": "QUICK_THRUST",
+          "weight": 0.3,
+          "hits": 1,
+          "windUp": 600,
+          "dropDist": 200,
+          "heavy": false,
+          "cooldown": 1800,
+          "windUpImgs": [
+            "gundyr.png"
+          ],
+          "activeImgs": [
+            "gundyr.png"
+          ]
+        },
+        {
+          "name": "COMBO_FRENZY",
+          "weight": 0.25,
+          "hits": 3,
+          "windUp": 500,
+          "dropDist": 180,
+          "heavy": false,
+          "cooldown": 3000,
+          "windUpImgs": [
+            "gundyr.png"
+          ],
+          "activeImgs": [
+            "gundyr.png"
+          ]
+        },
+        {
+          "name": "MEGA_SLAM",
+          "weight": 0.15,
+          "hits": 1,
+          "windUp": 1500,
+          "dropDist": 300,
+          "heavy": true,
+          "cooldown": 3500,
+          "windUpImgs": [
+            "gundyr.png"
+          ],
+          "activeImgs": [
+            "gundyr.png"
+          ]
+        },
+        {
+          "name": "SWEEP_ATTACK",
+          "weight": 0.1,
+          "hits": 2,
+          "windUp": 800,
+          "dropDist": 220,
+          "heavy": true,
+          "cooldown": 2800,
+          "windUpImgs": [
+            "gundyr.png"
+          ],
+          "activeImgs": [
+            "gundyr.png"
+          ]
+        }
+      ]
+    }
+  ]
+}

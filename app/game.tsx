@@ -1,4 +1,5 @@
 import { useRouter } from "expo-router";
+import { FontAwesome5 } from "@expo/vector-icons";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -10,6 +11,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Pressable,
 } from "react-native";
 import {
   Directions,
@@ -19,71 +21,154 @@ import {
 } from "react-native-gesture-handler";
 
 import { FloatingDamage } from "../components/game/FloatingDamage";
-import { InventoryScreen } from "../components/game/InventoryScreen";
 import { MapScreen } from "../components/game/MapScreen";
-import { BottomNavbar } from "../components/ui/BottomNavbar";
+import { WalkingZone } from "../components/game/WalkingZone";
 import { ProfileButton } from "../components/ui/ProfileButton";
-import { CONFIG, FRAME_HEIGHT, FRAME_WIDTH } from "../constants/GameConfig";
+import { FRAME_HEIGHT, FRAME_WIDTH } from "../constants/GameConfig";
 import { useGameEngine } from "../hooks/useGameEngine";
+import { useEnemyData, useMapData, getEnemyById } from "../hooks/useLocalData";
+import { useMapEngine } from "../hooks/useMapEngine";
 
-import { useSupabaseData } from "../hooks/useSupabaseData";
+import { ENEMY_IMAGES, HERO_IMAGES } from "../constants/ImageRegistry";
 
-const GundyrImg = require("@/assets/images/enemy/gundyr.png");
-const HeroImg = require("@/assets/images/hero/ashen-one.png");
-
-// Image Dictionary for Local Assets mapped from Cloud Strings
-const BOSS_IMAGES: Record<string, any> = {
-  "gundyr.png": require("@/assets/images/enemy/gundyr.png"),
-};
+// Screen types: MAP (world map), EXPLORING (walking in a map), COMBAT (fighting)
+type GameScreenType = "MAP" | "EXPLORING" | "COMBAT";
 
 export default function GameScreen() {
   const router = useRouter();
+  const [screen, setScreen] = useState<GameScreenType>("MAP");
+  const [currentEnemyId, setCurrentEnemyId] = useState<string>("gundyr");
+  const [pendingCombat, setPendingCombat] = useState(false);
+
   const {
-    data: supabaseData,
-    loading: supabaseLoading,
-    error: supabaseError,
-  } = useSupabaseData("Enemy");
+    data: enemyData,
+    loading: enemyLoading,
+    error: enemyError,
+    setEnemyId,
+  } = useEnemyData(currentEnemyId);
 
-  const engine = useGameEngine(supabaseData, supabaseLoading);
-  const [activeTab, setActiveTab] = useState<"battle" | "map" | "inventory">(
-    "battle",
-  );
+  const mapEngine = useMapEngine();
+  const engine = useGameEngine(enemyData, enemyLoading, mapEngine.playerHp);
+  const { currentMap, loading: mapLoading } = useMapData(mapEngine.currentNodeId);
 
+  // When combat is won → go back to exploring (next tile)
   useEffect(() => {
-    if (supabaseLoading) {
-      console.log("Supabase: กำลังโหลดข้อมูล...");
-    } else {
-      console.log("Supabase: โหลดข้อมูลเสร็จแล้ว! สถานะ Error:", supabaseError);
-      console.log("Supabase: ข้อมูลที่ได้มาฝั่ง UI:", supabaseData);
+    if (engine.gameState === "WON") {
+      const timer = setTimeout(() => {
+        mapEngine.markTileDefeated(mapEngine.currentNodeId, mapEngine.currentTileIndex);
+        mapEngine.setPlayerHp(engine.pHp);
+        engine.resetGame();
+        mapEngine.moveToNextTile();
+        setScreen("EXPLORING");
+      }, 2500);
+      return () => clearTimeout(timer);
     }
-  }, [supabaseData, supabaseLoading, supabaseError]);
+  }, [engine.gameState]);
 
-  const tapGesture = Gesture.Tap()
-    .runOnJS(true)
-    .onEnd(() => engine.handleAction("ATTACK"));
-  const swipeLeft = Gesture.Fling()
-    .direction(Directions.LEFT)
-    .runOnJS(true)
-    .onEnd(() => engine.handleAction("DODGE", "LEFT"));
-  const swipeRight = Gesture.Fling()
-    .direction(Directions.RIGHT)
-    .runOnJS(true)
-    .onEnd(() => engine.handleAction("DODGE", "RIGHT"));
-  const composedGesture = Gesture.Exclusive(swipeLeft, swipeRight, tapGesture);
+  // Sync HP after damage or fight ends
+  useEffect(() => {
+    if (engine.pHp !== mapEngine.playerHp) {
+      mapEngine.setPlayerHp(engine.pHp);
+    }
+  }, [engine.pHp]);
+
+  // Watch for combat readiness: trigger encounter AFTER engine finishes re-initializing
+  useEffect(() => {
+    if (pendingCombat && screen === "COMBAT") {
+      // Delay to ensure data loading + engine re-init effects have fully completed
+      const timer = setTimeout(() => {
+        engine.triggerEncounter();
+        setPendingCombat(false);
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [pendingCombat, screen]);
+
+  // Handle Flee Success
+  useEffect(() => {
+    if (engine.fleeProgress >= 100) {
+      engine.resetGame();
+      setScreen("MAP");
+    }
+  }, [engine.fleeProgress]);
+
+  // Handle entering combat from a tile
+  const handleStartCombat = (enemyId?: string) => {
+    if (enemyId) {
+      setCurrentEnemyId(enemyId);
+      setEnemyId(enemyId);
+    }
+    setScreen("COMBAT");
+    setPendingCombat(true); // Don't call triggerEncounter directly, wait for data to be ready
+  };
+
+  // Handle map complete (walked past last tile)
+  const handleMapComplete = () => {
+    setScreen("MAP");
+  };
+
+  // Handle returning to map (from exploring)
+  const handleReturnToMap = () => {
+    setScreen("MAP");
+  };
+
+  // Handle selecting a node from the world map
+  const handleSelectNode = (node: any) => {
+    mapEngine.setCurrentNodeId(node.id);
+    mapEngine.setCurrentTileIndex(0);
+    engine.resetGame();
+    setScreen("EXPLORING");
+  };
+
+  // Actions (Now button-based)
+  const handleAttack = () => engine.handleAction("ATTACK");
+  const handleDodge = (direction: "LEFT" | "RIGHT") => engine.handleAction("DODGE", direction);
 
   const bgInterpolation = engine.isEnraged ? "#2a0000" : "#000000";
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <View style={{ flex: 1, backgroundColor: "#000" }}>
-        {/* ===== BATTLE TAB ===== */}
-        {activeTab === "battle" && engine.gameState !== "LOADING" && (
-          <GestureDetector gesture={composedGesture}>
+
+        {/* ===== WORLD MAP SCREEN ===== */}
+        {screen === "MAP" && (
+          <MapScreen
+            currentNodeId={mapEngine.currentNodeId}
+            unlockedNodes={mapEngine.unlockedNodes}
+            lastBonfireId={mapEngine.lastBonfireId}
+            onSelectNode={handleSelectNode}
+          />
+        )}
+
+        {/* ===== EXPLORING SCREEN (Walking through tiles) ===== */}
+        {screen === "EXPLORING" && (
+          <WalkingZone
+            tiles={currentMap?.tiles || []}
+            currentTileIndex={mapEngine.currentTileIndex}
+            moveToNextTile={mapEngine.moveToNextTile}
+            moveToPreviousTile={mapEngine.moveToPreviousTile}
+            defeatedTiles={mapEngine.defeatedTiles[mapEngine.currentNodeId] || []}
+            hp={mapEngine.playerHp}
+            onEncounter={handleStartCombat}
+            onRest={() => {
+              mapEngine.restAtBonfire(mapEngine.currentNodeId);
+              engine.healPlayer();
+            }}
+            onMapComplete={handleMapComplete}
+            onReturnToMap={handleReturnToMap}
+            mapName={currentMap?.name || "UNKNOWN"}
+          />
+        )}
+
+        {/* ===== COMBAT SCREEN ===== */}
+        {screen === "COMBAT" && engine.gameState !== "LOADING" && (
+          <View style={{ flex: 1 }}>
             <View
               style={[styles.container, { backgroundColor: bgInterpolation }]}
             >
-              {/* Top Navbar HUD */}
-              <ProfileButton />
+              <View style={styles.topHud}>
+                <ProfileButton hp={engine.pHp} />
+              </View>
 
               <Animated.View
                 style={[
@@ -105,7 +190,7 @@ export default function GameScreen() {
                 />
 
                 {/* Boss Section */}
-                <View style={styles.bossBox}>
+                <View style={[styles.bossBox, { marginTop: 20 }]}>
                   <Text
                     style={[
                       styles.bossTitle,
@@ -148,17 +233,16 @@ export default function GameScreen() {
                       />
                     </View>
 
-                    {/* TODO: Remove later - Debug Cooldown Bar */}
                     <View style={[styles.barBG, { height: 4, marginTop: 4, backgroundColor: '#333' }]}>
-                      <Animated.View 
-                        style={{ 
-                          height: '100%', 
+                      <Animated.View
+                        style={{
+                          height: '100%',
                           backgroundColor: 'white',
                           width: engine.bCooldown.interpolate({
                             inputRange: [0, 100],
                             outputRange: ['0%', '100%']
                           })
-                        }} 
+                        }}
                       />
                     </View>
                   </View>
@@ -178,16 +262,22 @@ export default function GameScreen() {
                   <Animated.View
                     style={[
                       styles.bossBody,
-                      { transform: [{ translateY: engine.bY }] },
+                      { 
+                        transform: [
+                          { translateY: engine.bY },
+                          { scale: engine.bossScale }
+                        ],
+                        opacity: engine.bossOpacity
+                      },
                     ]}
                   >
                     <Image
                       source={
-                        engine.currentBossImage && BOSS_IMAGES[engine.currentBossImage]
-                          ? BOSS_IMAGES[engine.currentBossImage]
+                        engine.currentBossImage && ENEMY_IMAGES[engine.currentBossImage]
+                          ? ENEMY_IMAGES[engine.currentBossImage]
                           : engine.currentBossImage
                             ? { uri: engine.currentBossImage }
-                            : GundyrImg
+                            : ENEMY_IMAGES["gundyr.png"]
                       }
                       style={[
                         styles.fullImg,
@@ -224,7 +314,7 @@ export default function GameScreen() {
                     ]}
                   >
                     <Image
-                      source={HeroImg}
+                      source={HERO_IMAGES.ashenOne}
                       style={[
                         styles.spritesheet,
                         {
@@ -256,24 +346,58 @@ export default function GameScreen() {
                     {engine.combo} HITS COMBO!
                   </Text>
                 )}
-                <View style={styles.statRow}>
-                  <Text style={styles.label}>HP</Text>
-                  <View style={[styles.barBGHud, { flex: 1 }]}>
-                    <Animated.View
-                      style={[
-                        styles.catchUpBar,
-                        {
-                          width: engine.pCatchUp.interpolate({
-                            inputRange: [0, 100],
-                            outputRange: ["0%", "100%"],
-                          }),
-                        },
+
+                {/* Flee Button - Bottom Left */}
+                {engine.fleeDifficulty > 0 && (
+                  <View style={styles.fleeContainer}>
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.fleeCircle,
+                        (pressed || engine.isFleeing) && styles.fleeCircleActive
                       ]}
-                    />
-                    <View
-                      style={[styles.hpFill, { width: `${engine.pHp}%` }]}
-                    />
+                      onPressIn={() => engine.setIsFleeing(true)}
+                      onPressOut={() => engine.setIsFleeing(false)}
+                    >
+                      <View 
+                        style={[
+                          styles.fleeFill, 
+                          { height: `${engine.fleeProgress}%` }
+                        ]} 
+                      />
+                      <View style={styles.fleeContent}>
+                        <FontAwesome5 name="running" size={24} color={engine.isFleeing ? "#ff9800" : "#eee"} />
+                        <Text style={styles.fleeText}>
+                          {engine.isFleeing ? "FLEEING" : "FLEE"}
+                        </Text>
+                      </View>
+                    </Pressable>
                   </View>
+                )}
+
+                {/* COMBAT ACTIONS - Bottom Right */}
+                <View style={styles.actionContainer}>
+                  {/* Dodge (Left Only) */}
+                  <TouchableOpacity 
+                    style={[styles.smallBtn, engine.isLocked && styles.btnDisabled]} 
+                    activeOpacity={0.7}
+                    onPress={() => handleDodge("LEFT")}
+                    disabled={engine.isLocked}
+                  >
+                    <FontAwesome5 name="undo-alt" size={24} color="white" />
+                    <Text style={{ fontSize: 10, color: 'white', fontWeight: 'bold', marginTop: 4 }}>DODGE</Text>
+                  </TouchableOpacity>
+
+                  {/* Attack Button */}
+                  <TouchableOpacity 
+                    style={[styles.mainBtn, engine.isLocked && styles.btnDisabled]} 
+                    activeOpacity={0.7}
+                    onPress={handleAttack}
+                    disabled={engine.isLocked}
+                  >
+                    <View style={styles.attackInner}>
+                      <FontAwesome5 name="hand-rock" size={48} color="white" />
+                    </View>
+                  </TouchableOpacity>
                 </View>
               </View>
 
@@ -285,30 +409,31 @@ export default function GameScreen() {
                 ]}
                 pointerEvents="none"
               />
-            </View>
-          </GestureDetector>
-        )}
 
-        {/* LOADING SCREEN OVERLAY */}
-        {engine.gameState === "LOADING" && (
-          <View style={styles.loadingScreen}>
-            <ActivityIndicator size="large" color="#ff4444" />
-            <Text style={styles.loadingScreenText}>LOADING CLOUD DATA...</Text>
+              {/* Countdown Overlay */}
+              {engine.gameState === "COUNTDOWN" && (
+                <View style={styles.countdownOverlay}>
+                  <Text style={styles.countdownText}>
+                    {engine.countdown > 0 ? engine.countdown : "GO!"}
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
         )}
 
-        {/* ===== MAP TAB ===== */}
-        {activeTab === "map" && <MapScreen />}
-
-        {/* ===== INVENTORY TAB ===== */}
-        {activeTab === "inventory" && <InventoryScreen />}
-
-        {/* ===== BOTTOM NAVBAR ===== */}
-        <BottomNavbar activeTab={activeTab} onTabPress={setActiveTab} />
+        {/* LOADING SCREEN OVERLAY */}
+        {screen === "COMBAT" && engine.gameState === "LOADING" && (
+          <View style={styles.loadingScreen}>
+            <ActivityIndicator size="large" color="#ff4444" />
+            <Text style={styles.loadingScreenText}>PREPARING BATTLE...</Text>
+          </View>
+        )}
       </View>
 
+      {/* YOU DIED Modal */}
       <Modal
-        visible={engine.gameState !== "PLAYING"}
+        visible={engine.gameState === "LOST"}
         transparent
         animationType="fade"
       >
@@ -326,22 +451,19 @@ export default function GameScreen() {
               }),
             ]}
           >
-            {engine.gameState === "WON" ? "VICTORY" : "YOU DIED"}
+            YOU DIED
           </Text>
-          <View style={{ flexDirection: "row", gap: 20 }}>
-            <TouchableOpacity
-              style={styles.retryBtn}
-              onPress={engine.resetGame}
-            >
-              <Text style={styles.retryText}>RETRY</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.retryBtn}
-              onPress={() => router.replace("/")}
-            >
-              <Text style={styles.retryText}>MAIN MENU</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={styles.retryBtn}
+            onPress={() => {
+              engine.resetGame();
+              mapEngine.respawnAtBonfire();
+              mapEngine.setCurrentTileIndex(0);
+              setScreen("MAP");
+            }}
+          >
+            <Text style={styles.retryText}>RESPAWN AT BONFIRE</Text>
+          </TouchableOpacity>
         </View>
       </Modal>
     </GestureHandlerRootView>
@@ -378,6 +500,88 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#555",
   },
+  fleeContainer: {
+    position: 'absolute',
+    left: 10,
+    bottom: 20,
+    alignItems: 'center',
+    zIndex: 30,
+  },
+  fleeCircle: {
+    width: 85,
+    height: 85,
+    borderRadius: 42.5,
+    backgroundColor: 'rgba(30,30,30,0.8)',
+    borderWidth: 2,
+    borderColor: '#444',
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  fleeCircleActive: {
+    borderColor: '#ff9800',
+    backgroundColor: 'rgba(0,0,0,0.9)',
+  },
+  fleeFill: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(255,152,0,0.4)',
+  },
+  fleeContent: {
+    alignItems: 'center',
+  },
+  fleeText: {
+    color: '#eee',
+    fontSize: 10,
+    fontWeight: 'bold',
+    letterSpacing: 1,
+    marginTop: 4,
+  },
+  actionContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 20,
+    marginBottom: 5,
+  },
+  mainBtn: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(230,0,0,0.3)',
+    borderWidth: 3,
+    borderColor: '#ff4444',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 10,
+    shadowColor: '#f00',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+  },
+  attackInner: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  smallBtn: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderWidth: 2,
+    borderColor: '#888',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  btnDisabled: {
+    opacity: 0.3,
+    borderColor: '#333',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
   catchUpBar: {
     position: "absolute",
     height: "100%",
@@ -399,16 +603,23 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   spritesheet: { width: 1080, height: 719, position: "absolute" },
-  hud: { position: "absolute", bottom: 60, left: 25, right: 25, zIndex: 2 },
+  hud: { position: "absolute", bottom: 30, left: 20, right: 20, zIndex: 2 },
+  topHud: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+    zIndex: 50,
+  },
   statRow: { flexDirection: "row", alignItems: "center" },
   label: { color: "white", fontSize: 14, width: 35, fontWeight: "bold" },
-  hpFill: { height: "100%", backgroundColor: "#ef5350", position: "absolute" },
   comboText: {
     color: "#ffea00",
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: "bold",
     fontStyle: "italic",
-    marginBottom: 5,
+    marginBottom: 10,
+    textAlign: 'center',
   },
   modal: {
     flex: 1,
@@ -437,5 +648,25 @@ const styles = StyleSheet.create({
     top: 50,
     zIndex: 10,
     alignItems: "center",
+  },
+  countdownOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.4)",
+    zIndex: 100,
+  },
+  countdownText: {
+    color: "#fff",
+    fontSize: 120,
+    fontWeight: "bold",
+    ...Platform.select({
+      web: { textShadow: "0px 0px 20px #ff4444" } as any,
+      default: {
+        textShadowColor: "#ff4444",
+        textShadowOffset: { width: 0, height: 0 },
+        textShadowRadius: 20,
+      },
+    }),
   },
 });

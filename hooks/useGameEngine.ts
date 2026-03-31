@@ -19,15 +19,16 @@ const DEFAULT_BOSS_PATTERNS: BossPattern[] = [
   }
 ];
 
-export function useGameEngine(initialEnemyData?: EnemyData[] | null, isDataLoading?: boolean) {
-  const player = useRef({ status: "IDLE", hp: 100, isInvincible: false });
+export function useGameEngine(initialEnemyData?: EnemyData[] | null, isDataLoading?: boolean, initialPlayerHp: number = 100) {
+  const player = useRef({ status: "IDLE", hp: initialPlayerHp, isInvincible: false });
   const boss = useRef({ status: "IDLE", hp: CONFIG.BOSS.maxHp, damage: CONFIG.BOSS.damage, hitGap: CONFIG.BOSS.hitGap, isStunned: false });
 
-  const [pHp, setPHp] = useState(100);
+  const [pHp, setPHp] = useState(initialPlayerHp);
   const [bHp, setBHp] = useState(CONFIG.BOSS.maxHp);
   const [bMaxHp, setBMaxHp] = useState(CONFIG.BOSS.maxHp);
   const [bossName, setBossName] = useState("GUNDYR");
-  const [gameState, setGameState] = useState<"LOADING" | "PLAYING" | "WON" | "LOST">("LOADING");
+  const [gameState, setGameState] = useState<"LOADING" | "EXPLORING" | "COUNTDOWN" | "PLAYING" | "WON" | "LOST">("LOADING");
+  const [countdown, setCountdown] = useState(0);
   const [isLocked, setIsLocked] = useState(false);
   const [bossAction, setBossAction] = useState("WATCHING...");
   const [isEnraged, setIsEnraged] = useState(false);
@@ -36,6 +37,11 @@ export function useGameEngine(initialEnemyData?: EnemyData[] | null, isDataLoadi
   const [bossPatterns, setBossPatterns] = useState<BossPattern[]>(DEFAULT_BOSS_PATTERNS);
   const [currentBossImage, setCurrentBossImage] = useState<string | null>(null);
   const [baseBossImage, setBaseBossImage] = useState<string | null>(null);
+  const [fleeDifficulty, setFleeDifficulty] = useState(0);
+
+  // Flee logic state
+  const [fleeProgress, setFleeProgress] = useState(0);
+  const [isFleeing, setIsFleeing] = useState(false);
 
   // Animations
   const pY = useRef(new Animated.Value(0)).current;
@@ -44,9 +50,20 @@ export function useGameEngine(initialEnemyData?: EnemyData[] | null, isDataLoadi
   const shakeX = useRef(new Animated.Value(0)).current;
   const flashOp = useRef(new Animated.Value(0)).current;
   const slowMoOverlay = useRef(new Animated.Value(0)).current;
-  const pCatchUp = useRef(new Animated.Value(100)).current;
+  const pCatchUp = useRef(new Animated.Value(initialPlayerHp)).current;
+
+  // Sync HP with map state when not in combat
+  useEffect(() => {
+    if (gameState !== "PLAYING" && gameState !== "COUNTDOWN" && gameState !== "LOST") {
+      player.current.hp = initialPlayerHp;
+      setPHp(initialPlayerHp);
+      pCatchUp.setValue(initialPlayerHp);
+    }
+  }, [initialPlayerHp]);
   const bCatchUp = useRef(new Animated.Value(100)).current;
   const bCooldown = useRef(new Animated.Value(0)).current;
+  const bossOpacity = useRef(new Animated.Value(1)).current;
+  const bossScale = useRef(new Animated.Value(1)).current;
 
   const [frameX, setFrameX] = useState(0);
   const [frameY, setFrameY] = useState(0);
@@ -99,6 +116,8 @@ export function useGameEngine(initialEnemyData?: EnemyData[] | null, isDataLoadi
         setCurrentBossImage(null);
       }
 
+      setFleeDifficulty((enemy as any).flee_difficulty || 5);
+
       if (enemy.pattern && enemy.pattern.length > 0) {
         console.log("✅ ดึง Pattern ข้อมูลจาก Supabase แล้ว! จำนวน:", enemy.pattern.length, "ท่า");
         enemy.pattern.forEach((p: BossPattern) => {
@@ -116,8 +135,40 @@ export function useGameEngine(initialEnemyData?: EnemyData[] | null, isDataLoadi
       setBaseBossImage(null);
       setCurrentBossImage(null);
     }
-    setGameState("PLAYING");
+    setGameState("EXPLORING");
+    setCountdown(0);
   }, [initialEnemyData, isDataLoading]);
+
+  // Countdown Logic
+  useEffect(() => {
+    let timer: any;
+    if (gameState === "COUNTDOWN" && countdown > 0) {
+      timer = setTimeout(() => {
+        setCountdown((prev) => prev - 1);
+      }, 1000);
+    } else if (gameState === "COUNTDOWN" && countdown === 0) {
+      // Show "GO!" for 500ms before starting
+      timer = setTimeout(() => {
+        setGameState("PLAYING");
+      }, 500);
+    }
+    return () => clearTimeout(timer);
+  }, [gameState, countdown]);
+
+  // Flee progress logic
+  useEffect(() => {
+    let timer: any;
+    if (isFleeing && gameState === "PLAYING" && fleeDifficulty > 0) {
+      timer = setInterval(() => {
+        setFleeProgress((prev) => {
+          const inc = 10 / fleeDifficulty; // Harder = slower
+          const next = prev + inc;
+          return next >= 100 ? 100 : next;
+        });
+      }, 100);
+    }
+    return () => clearInterval(timer);
+  }, [isFleeing, gameState, fleeDifficulty]);
 
   useEffect(() => {
     Animated.timing(bCatchUp, {
@@ -231,6 +282,7 @@ export function useGameEngine(initialEnemyData?: EnemyData[] | null, isDataLoadi
             triggerFlash(200);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
             setCombo(0);
+            setFleeProgress(0); // Reset flee progress on hit!
 
             if (player.current.hp <= 0) {
               setGameState("LOST");
@@ -240,8 +292,14 @@ export function useGameEngine(initialEnemyData?: EnemyData[] | null, isDataLoadi
           } else {
             triggerShake(5);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            showFeedback("WITCH TIME!", "PERFECT", "PLAYER");
-            activateWitchTime();
+            
+            // 25% Chance for boss stun (Witch Time) on successful dodge
+            if (Math.random() < 0.25) {
+              showFeedback("WITCH TIME!", "PERFECT", "PLAYER");
+              activateWitchTime();
+            } else {
+              showFeedback("DODGED!", "PERFECT", "PLAYER");
+            }
           }
         }
       }, isEnraged ? 50 : 80);
@@ -341,6 +399,13 @@ export function useGameEngine(initialEnemyData?: EnemyData[] | null, isDataLoadi
             triggerFlash(1000);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             setGameState("WON");
+            
+            // Dissolve animation
+            Animated.parallel([
+              Animated.timing(bossOpacity, { toValue: 0, duration: 2000, useNativeDriver: true }),
+              Animated.timing(bossScale, { toValue: 0.5, duration: 2000, useNativeDriver: true }),
+              Animated.timing(bY, { toValue: 50, duration: 2000, useNativeDriver: true }),
+            ]).start();
           }
         }
         player.current.isInvincible = false;
@@ -363,13 +428,14 @@ export function useGameEngine(initialEnemyData?: EnemyData[] | null, isDataLoadi
     const baseDamage = (initialEnemyData && initialEnemyData.length > 0 && initialEnemyData[0].damage) ? initialEnemyData[0].damage : CONFIG.BOSS.damage;
     const baseHitGap = (initialEnemyData && initialEnemyData.length > 0 && initialEnemyData[0].hit_gap) ? initialEnemyData[0].hit_gap : CONFIG.BOSS.hitGap;
 
-    player.current = { status: "IDLE", hp: 100, isInvincible: false };
+    player.current = { status: "IDLE", hp: pHp, isInvincible: false };
     boss.current = { status: "IDLE", hp: startingHp, damage: baseDamage, hitGap: baseHitGap, isStunned: false };
-    setPHp(100);
+    // setPHp(pHp); // pHp stays the same
     setBHp(startingHp);
     setBMaxHp(startingHp);
     setFeedbacks([]);
-    setGameState("PLAYING");
+    setGameState("EXPLORING");
+    setCountdown(0);
     setIsLocked(false);
     setIsEnraged(false);
     setCombo(0);
@@ -379,11 +445,28 @@ export function useGameEngine(initialEnemyData?: EnemyData[] | null, isDataLoadi
     pCatchUp.setValue(100);
     bCatchUp.setValue(100);
     bCooldown.setValue(0);
+    bossOpacity.setValue(1);
+    bossScale.setValue(1);
+    setFleeProgress(0);
+    setIsFleeing(false);
+  };
+
+  const healPlayer = () => {
+    player.current.hp = 100;
+    setPHp(100);
+    pCatchUp.setValue(100);
+    showFeedback("+100 HP", "SUCCESS", "PLAYER");
+  };
+
+  const triggerEncounter = () => {
+    setGameState("COUNTDOWN");
+    setCountdown(3);
   };
 
   return {
     pHp, setPHp, bHp, setBHp, bMaxHp, gameState, setGameState, isLocked, bossAction, bossName, isEnraged, combo, feedbacks,
-    pY, pX, bY, shakeX, flashOp, slowMoOverlay, pCatchUp, bCatchUp, bCooldown, frameX, frameY, currentBossImage,
-    resetGame, handleAction
+    pY, pX, bY, shakeX, flashOp, slowMoOverlay, pCatchUp, bCatchUp, bCooldown, bossOpacity, bossScale, frameX, frameY, currentBossImage,
+    countdown, resetGame, handleAction, healPlayer, triggerEncounter,
+    fleeProgress, isFleeing, setIsFleeing, fleeDifficulty
   };
 }

@@ -27,7 +27,7 @@ const INITIAL_MAIL = [
 
 const DIFFICULTIES = ['EASY', 'NORMAL', 'HARD'] as const;
 
-export function ProfileButton() {
+export function ProfileButton({ hp = 100 }: { hp?: number }) {
   const [modalVisible, setModalVisible] = useState(false);
   const [mailModalVisible, setMailModalVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
@@ -62,9 +62,9 @@ export function ProfileButton() {
           </View>
           <View style={styles.progressBarWrapper}>
             <View style={styles.progressBarBg}>
-              <View style={[styles.progressBarFill, { width: '42.54%' }]} />
+              <View style={[styles.progressBarFill, { width: `${hp}%`, backgroundColor: '#ff5252' }]} />
             </View>
-            <Text style={styles.progressText}>42.54%</Text>
+            <Text style={[styles.progressText, { color: '#ff5252' }]}>{hp}%</Text>
           </View>
         </View>
         <View style={[styles.avatarBox, { borderColor: selectedAvatar.color }]}>

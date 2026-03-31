@@ -1,0 +1,148 @@
+{
+  "maps": [
+    {
+      "id": "firelink_shrine",
+      "name": "Firelink Shrine",
+      "x": "20%",
+      "y": "80%",
+      "icon": "fire",
+      "color": "#ff9800",
+      "type": "bonfire",
+      "description": "A safe haven where the bonfire burns, linking the Ashen One to the world.",
+      "tiles": [
+        {
+          "index": 0,
+          "type": "bonfire",
+          "name": "Firelink Bonfire",
+          "icon": "fire",
+          "color": "#ff9800",
+          "description": "Rest here to restore HP and save progress.",
+          "image": "resourse/bonfire.png",
+          "canRest": true,
+          "enemyId": null,
+          "loot": null
+        },
+        {
+          "index": 1,
+          "type": "path",
+          "name": "Ashen Path",
+          "icon": "road",
+          "color": "#555555",
+          "description": "A quiet trail leading away from the shrine.",
+          "image": null,
+          "canRest": false,
+          "enemyId": null,
+          "loot": null
+        },
+        {
+          "index": 2,
+          "type": "enemy",
+          "name": "Lizard Soldier",
+          "icon": "skull",
+          "color": "#e0e0e0",
+          "description": "A wandering hollow blocks the path.",
+          "image": null,
+          "canRest": false,
+          "enemyId": "lizard_soldier",
+          "loot": {
+            "souls": 100,
+            "items": [
+              "broken_straight_sword"
+            ]
+          }
+        },
+        {
+          "index": 3,
+          "type": "chest",
+          "name": "Forgotten Chest",
+          "icon": "treasure-chest",
+          "color": "#ffd54f",
+          "description": "An old wooden chest left behind by a fallen warrior.",
+          "image": null,
+          "canRest": false,
+          "enemyId": null,
+          "loot": {
+            "souls": 200,
+            "items": [
+              "estus_shard"
+            ]
+          }
+        },
+        {
+          "index": 4,
+          "type": "boss",
+          "name": "Iudex Gundyr",
+          "icon": "crown",
+          "color": "#ff1744",
+          "description": "The first great challenge. Defeat him to prove your worth.",
+          "image": null,
+          "canRest": false,
+          "enemyId": "gundyr",
+          "loot": {
+            "souls": 1000,
+            "items": [
+              "coiled_sword"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "undead_burg",
+      "name": "Undead Burg",
+      "x": "50%",
+      "y": "65%",
+      "icon": "skull",
+      "color": "#e0e0e0",
+      "type": "enemy",
+      "description": "A crumbling city overrun by the undead.",
+      "tiles": [
+        {
+          "index": 0,
+          "type": "bonfire",
+          "name": "Burg Bonfire",
+          "icon": "fire",
+          "color": "#ff9800",
+          "description": "A temporary safe zone in the burg.",
+          "image": "resourse/bonfire.png",
+          "canRest": true,
+          "enemyId": null,
+          "loot": null
+        }
+      ]
+    },
+    {
+      "id": "cathedral",
+      "name": "Cathedral",
+      "x": "35%",
+      "y": "45%",
+      "icon": "church",
+      "color": "#9e9e9e",
+      "type": "enemy",
+      "description": "A massive stone structure teeming with dark secrets.",
+      "tiles": []
+    },
+    {
+      "id": "catacombs",
+      "name": "Catacombs",
+      "x": "65%",
+      "y": "35%",
+      "icon": "dungeon",
+      "color": "#795548",
+      "type": "enemy",
+      "description": "A dark subterranean network filled with ancient skeletons.",
+      "tiles": []
+    },
+    {
+      "id": "anor_londo",
+      "name": "Anor Londo",
+      "x": "50%",
+      "y": "15%",
+      "icon": "crown",
+      "color": "#ffd54f",
+      "type": "boss",
+      "description": "The city of the gods, basking in eternal twilight.",
+      "tiles": []
+    }
+  ]
+}
