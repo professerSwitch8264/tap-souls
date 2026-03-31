@@ -1,11 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState } from 'react';
+import mapsData from '../data/maps.json';
+import enemiesData from '../data/enemies.json';
 
 const STORAGE_KEY = '@tap_souls_map_state';
 
 interface MapState {
   currentNodeId: string;
   lastBonfireId: string;
+  lastBonfireTileIndex: number;
   unlockedNodes: string[];
   currentTileIndex: number;
   playerHp: number;
@@ -15,6 +18,7 @@ interface MapState {
 const DEFAULT_STATE: MapState = {
   currentNodeId: "firelink_shrine",
   lastBonfireId: "firelink_shrine",
+  lastBonfireTileIndex: 0,
   unlockedNodes: ["firelink_shrine"],
   currentTileIndex: 0,
   playerHp: 100,
@@ -24,6 +28,7 @@ const DEFAULT_STATE: MapState = {
 export function useMapEngine() {
   const [currentNodeId, setCurrentNodeIdState] = useState<string>(DEFAULT_STATE.currentNodeId);
   const [lastBonfireId, setLastBonfireIdState] = useState<string>(DEFAULT_STATE.lastBonfireId);
+  const [lastBonfireTileIndex, setLastBonfireTileIndexState] = useState<number>(DEFAULT_STATE.lastBonfireTileIndex);
   const [unlockedNodes, setUnlockedNodesState] = useState<string[]>(DEFAULT_STATE.unlockedNodes);
   const [currentTileIndex, setCurrentTileIndexState] = useState<number>(DEFAULT_STATE.currentTileIndex);
   const [playerHp, setPlayerHpState] = useState<number>(DEFAULT_STATE.playerHp);
@@ -49,6 +54,7 @@ export function useMapEngine() {
           } else {
             setCurrentNodeIdState(parsed.currentNodeId || DEFAULT_STATE.currentNodeId);
             setLastBonfireIdState(parsed.lastBonfireId || DEFAULT_STATE.lastBonfireId);
+            setLastBonfireTileIndexState(parsed.lastBonfireTileIndex ?? DEFAULT_STATE.lastBonfireTileIndex);
             setUnlockedNodesState(parsed.unlockedNodes || DEFAULT_STATE.unlockedNodes);
             setCurrentTileIndexState(parsed.currentTileIndex ?? DEFAULT_STATE.currentTileIndex);
             setPlayerHpState(parsed.playerHp ?? DEFAULT_STATE.playerHp);
@@ -72,6 +78,7 @@ export function useMapEngine() {
         const stateToSave: MapState = {
           currentNodeId,
           lastBonfireId,
+          lastBonfireTileIndex,
           unlockedNodes,
           currentTileIndex,
           playerHp,
@@ -83,7 +90,7 @@ export function useMapEngine() {
       }
     };
     saveState();
-  }, [currentNodeId, lastBonfireId, unlockedNodes, currentTileIndex, playerHp, defeatedTiles, isLoaded]);
+  }, [currentNodeId, lastBonfireId, lastBonfireTileIndex, unlockedNodes, currentTileIndex, playerHp, defeatedTiles, isLoaded]);
 
   // Actions
   const setCurrentNodeId = (id: string) => {
@@ -119,19 +126,52 @@ export function useMapEngine() {
 
   const restAtBonfire = (id: string) => {
     setLastBonfireIdState(id);
+    setLastBonfireTileIndexState(currentTileIndex); // Save which tile the bonfire is at
     setCurrentNodeId(id);
     setPlayerHpState(100);
-    resetDefeatedTiles(id);
-    return true; 
+
+    // Only reset non-boss defeated tiles (bosses stay dead permanently)
+    setDefeatedTilesState((prev) => {
+      const currentDefeated = prev[id] || [];
+      if (currentDefeated.length === 0) return prev;
+
+      // Find the map data to check which tiles are bosses
+      const map = (mapsData.maps as any[]).find((m: any) => m.id === id);
+      if (!map) {
+        // If we can't find the map, don't reset anything (safe fallback)
+        return prev;
+      }
+
+      // Keep only boss tile indices in the defeated list
+      const bossTileIndices = currentDefeated.filter((tileIdx: number) => {
+        const tile = map.tiles[tileIdx];
+        if (!tile) return false;
+
+        // Check if this tile's enemy is a boss
+        if (tile.type === 'boss') return true;
+        if (tile.enemyId) {
+          const enemy = (enemiesData.enemies as any[]).find((e: any) => e.id === tile.enemyId);
+          return enemy?.isBoss === true;
+        }
+        return false;
+      });
+
+      return { ...prev, [id]: bossTileIndices };
+    });
+
+    return true;
   };
 
   const respawnAtBonfire = () => {
     setCurrentNodeIdState(lastBonfireId);
+    setCurrentTileIndexState(lastBonfireTileIndex);
+    setPlayerHpState(100);
   };
 
   const resetMapProgress = async () => {
     setCurrentNodeIdState(DEFAULT_STATE.currentNodeId);
     setLastBonfireIdState(DEFAULT_STATE.lastBonfireId);
+    setLastBonfireTileIndexState(DEFAULT_STATE.lastBonfireTileIndex);
     setUnlockedNodesState(DEFAULT_STATE.unlockedNodes);
     setCurrentTileIndexState(DEFAULT_STATE.currentTileIndex);
     setPlayerHpState(DEFAULT_STATE.playerHp);
@@ -142,6 +182,7 @@ export function useMapEngine() {
   return {
     currentNodeId,
     lastBonfireId,
+    lastBonfireTileIndex,
     unlockedNodes,
     currentTileIndex,
     playerHp,

@@ -457,8 +457,7 @@ export default function GameScreen() {
             onPress={() => {
               engine.resetGame();
               mapEngine.respawnAtBonfire();
-              mapEngine.setCurrentTileIndex(0);
-              setScreen("MAP");
+              setScreen("EXPLORING");
             }}
           >
             <Text style={styles.retryText}>RESPAWN AT BONFIRE</Text>

@@ -44,6 +44,11 @@ export interface LocalEnemyData {
   damage: number;
   hit_gap: number;
   image_url: string;
+  flee_chance: number;
+  flee_difficulty: number;
+  isBoss: boolean;
+  souls: number;
+  loot: string[];
   dialogues: string[];
   pattern: BossPattern[];
 }

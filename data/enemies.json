@@ -9,6 +9,9 @@
       "image_url": "lizard.png",
       "flee_chance": 0.5,
       "flee_difficulty": 3,
+      "isBoss": false,
+      "souls": 100,
+      "loot": ["broken_straight_sword"],
       "dialogues": [
         "\"...urgh...\"",
         "\"...kill...me...\"",
@@ -71,6 +74,9 @@
       "image_url": "gundyr.png",
       "flee_chance": 0.3,
       "flee_difficulty": 7,
+      "isBoss": false,
+      "souls": 200,
+      "loot": [],
       "dialogues": [
         "\"NONE SHALL PASS.\"",
         "\"YOUR JOURNEY ENDS HERE.\"",
@@ -148,6 +154,9 @@
       "image_url": "gundyr.png",
       "flee_chance": 0,
       "flee_difficulty": 0,
+      "isBoss": true,
+      "souls": 1000,
+      "loot": ["coiled_sword"],
       "dialogues": [
         "\"...I SEE YOU, ASHEN ONE.\"",
         "\"THERE IS NO ESCAPE FROM DESTINY.\"",
