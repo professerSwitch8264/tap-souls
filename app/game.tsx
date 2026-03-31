@@ -58,7 +58,6 @@ export default function GameScreen() {
         mapEngine.markTileDefeated(mapEngine.currentNodeId, mapEngine.currentTileIndex);
         mapEngine.setPlayerHp(engine.pHp);
         engine.resetGame();
-        mapEngine.moveToNextTile();
         setScreen("EXPLORING");
       }, 2500);
       return () => clearTimeout(timer);

@@ -36,6 +36,18 @@
         },
         {
           "index": 2,
+          "type": "path",
+          "name": "Ashen Path",
+          "icon": "road",
+          "color": "#555555",
+          "description": "A quiet trail leading away from the shrine.",
+          "image": null,
+          "canRest": false,
+          "enemyId": null,
+          "loot": null
+        },
+        {
+          "index": 3,
           "type": "enemy",
           "name": "Lizard Soldier",
           "icon": "skull",
@@ -52,24 +64,31 @@
           }
         },
         {
-          "index": 3,
-          "type": "chest",
-          "name": "Forgotten Chest",
-          "icon": "treasure-chest",
-          "color": "#ffd54f",
-          "description": "An old wooden chest left behind by a fallen warrior.",
+          "index": 4,
+          "type": "path",
+          "name": "Ashen Path",
+          "icon": "road",
+          "color": "#555555",
+          "description": "A quiet trail leading away from the shrine.",
           "image": null,
           "canRest": false,
           "enemyId": null,
-          "loot": {
-            "souls": 200,
-            "items": [
-              "estus_shard"
-            ]
-          }
+          "loot": null
         },
         {
-          "index": 4,
+          "index": 5,
+          "type": "path",
+          "name": "Ashen Path",
+          "icon": "road",
+          "color": "#555555",
+          "description": "A quiet trail leading away from the shrine.",
+          "image": null,
+          "canRest": false,
+          "enemyId": null,
+          "loot": null
+        },
+        {
+          "index": 6,
           "type": "boss",
           "name": "Iudex Gundyr",
           "icon": "crown",

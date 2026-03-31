@@ -1,11 +1,11 @@
-import React, { useRef, useState } from 'react';
-import { Animated, Image, StyleSheet, Text, TouchableOpacity, View, Platform } from 'react-native';
-import * as Haptics from 'expo-haptics';
 import { FontAwesome5 } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import React, { useRef, useState } from 'react';
+import { Animated, Image, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { FRAME_HEIGHT, FRAME_WIDTH } from "../../constants/GameConfig";
-import { HERO_IMAGES, RESOURCE_IMAGES, getEnemyImageByEnemyId, getGameImage } from "../../constants/ImageRegistry";
-import { ProfileButton } from '../ui/ProfileButton';
+import { HERO_IMAGES, getEnemyImageByEnemyId, getGameImage } from "../../constants/ImageRegistry";
 import enemyData from "../../data/enemies.json";
+import { ProfileButton } from '../ui/ProfileButton';
 
 // Icon config for each tile type
 const TILE_TYPE_CONFIG: Record<string, { icon: string; color: string; label: string }> = {
@@ -170,8 +170,8 @@ export function WalkingZone({
     const success = Math.random() < fleeChance;
     if (success) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      alert("Escaped successfully!");
-      handleStep();
+      alert("Escaped successfully! You retreat to safety.");
+      handleBackwardStep();
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       alert("Failed to flee! The enemy blocks your way!");
@@ -200,18 +200,19 @@ export function WalkingZone({
 
   return (
     <View style={styles.container}>
-      {/* Top HUD - Profile + Map Info */}
-      <View style={[styles.topHud, { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 10 }]}>
-        <View style={styles.topLeftSide}>
+      {/* Top HUD - Two Row Stacked Layout */}
+      <View style={styles.topHud}>
+        {/* ROW 1: Profile */}
+        <View style={styles.topHudMain}>
           <ProfileButton hp={hp} />
-          <TouchableOpacity style={styles.backBtn} onPress={onReturnToMap}>
-            <FontAwesome5 name="chevron-left" size={12} color="#888" />
-            <Text style={styles.backText}>MAP</Text>
-          </TouchableOpacity>
         </View>
-        <View style={styles.topRightSide}>
-          <Text style={styles.mapTitle}>{mapName.toUpperCase()}</Text>
-          <Text style={styles.progressText}>{currentTileIndex + 1} / {totalTiles}</Text>
+        
+        {/* ROW 2: Map Info (Moved Down) */}
+        <View style={styles.topHudInfoRow}>
+          <Text style={styles.mapTitle} numberOfLines={1}>{mapName.toUpperCase()}</Text>
+          <View style={styles.progressBadge}>
+            <Text style={styles.progressText}>{currentTileIndex + 1} / {totalTiles}</Text>
+          </View>
         </View>
       </View>
 
@@ -339,13 +340,8 @@ export function WalkingZone({
             </>
           )}
 
-          {(currentTile.type === 'enemy' || currentTile.type === 'boss') && (
-            isDefeated ? (
-              <TouchableOpacity style={[styles.actionBtn, styles.continueBtn]} onPress={handleStep}>
-                <FontAwesome5 name="walking" size={14} color="#fff" />
-                <Text style={styles.actionText}>CONTINUE</Text>
-              </TouchableOpacity>
-            ) : encounterPhase === 'CHOICE' ? (
+          {(currentTile.type === 'enemy' || currentTile.type === 'boss') && !isDefeated && (
+            encounterPhase === 'CHOICE' ? (
               <View style={styles.choiceGroup}>
                 <TouchableOpacity style={[styles.choiceBtn, styles.fightChoice]} onPress={handleTileAction}>
                   <FontAwesome5 name="fist-raised" size={14} color="#fff" />
@@ -392,8 +388,8 @@ export function WalkingZone({
                 onPress={handleBackwardStep}
                 disabled={isFirstTile || isMoving}
               >
-                <FontAwesome5 name="arrow-left" size={16} color="#fff" />
-                <Text style={styles.moveBtnText}>BACKWARD</Text>
+                <FontAwesome5 name="arrow-left" size={12} color="#fff" />
+                <Text style={styles.moveBtnText}>BACK</Text>
               </TouchableOpacity>
               
               <TouchableOpacity 
@@ -401,8 +397,8 @@ export function WalkingZone({
                 onPress={handleStep}
                 disabled={isLastTile || isMoving}
               >
-                <Text style={styles.moveBtnText}>FORWARD</Text>
-                <FontAwesome5 name="arrow-right" size={16} color="#fff" />
+                <Text style={styles.moveBtnText}>WALK</Text>
+                <FontAwesome5 name="arrow-right" size={12} color="#fff" />
               </TouchableOpacity>
             </View>
           )}
@@ -425,10 +421,36 @@ const styles = StyleSheet.create({
   // Top HUD
   topHud: {
     paddingTop: Platform.OS === 'web' ? 10 : 40,
-    backgroundColor: '#000',
+    backgroundColor: '#050505',
     borderBottomWidth: 1,
-    borderBottomColor: '#111',
+    borderBottomColor: '#1a1a1a',
     zIndex: 20,
+    paddingBottom: 8,
+  },
+  topHudMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+  },
+  topHudInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 15,
+    marginTop: 10,
+    backgroundColor: 'rgba(255,255,255,0.02)',
+    paddingVertical: 4,
+    borderTopWidth: 1,
+    borderTopColor: '#111',
+  },
+  progressBadge: {
+    backgroundColor: 'rgba(255,152,0,0.1)',
+    paddingHorizontal: 10,
+    paddingVertical: 2,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,152,0,0.3)',
   },
   topLeftSide: {
     flexDirection: 'row',
@@ -442,13 +464,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
     backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: 4,
     borderWidth: 1,
-    borderColor: '#333',
-    height: 30,
+    borderColor: '#222',
   },
   backText: { color: '#888', fontSize: 9, fontWeight: 'bold', letterSpacing: 1 },
   mapTitle: {
@@ -579,32 +600,33 @@ const styles = StyleSheet.create({
   },
   movementActions: {
     flexDirection: 'row',
-    gap: 15,
+    gap: 10,
     marginTop: 10,
+    width: '100%',
+    paddingHorizontal: 10,
   },
   moveBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
     paddingVertical: 14,
-    paddingHorizontal: 25,
-    backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#444',
-    minWidth: 140,
+    borderColor: '#333',
+    backgroundColor: 'rgba(255,255,255,0.05)',
     justifyContent: 'center',
   },
   forwardBtn: {
-    backgroundColor: 'rgba(255,152,0,0.2)',
+    backgroundColor: 'rgba(255,152,0,0.15)',
     borderColor: '#ff9800',
   },
   moveBtnDisabled: {
-    opacity: 0.3,
+    opacity: 0.1,
   },
   moveBtnText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 'bold',
     letterSpacing: 1,
   },
