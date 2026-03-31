@@ -11,7 +11,9 @@
       "flee_difficulty": 3,
       "isBoss": false,
       "souls": 100,
-      "loot": ["broken_straight_sword"],
+      "loot": [
+        "broken_straight_sword"
+      ],
       "dialogues": [
         "\"...urgh...\"",
         "\"...kill...me...\"",
@@ -151,12 +153,14 @@
       "hp": 500,
       "damage": 25,
       "hit_gap": 500,
-      "image_url": "gundyr.png",
+      "image_url": "gundyr-idle.png",
       "flee_chance": 0,
       "flee_difficulty": 0,
       "isBoss": true,
       "souls": 1000,
-      "loot": ["coiled_sword"],
+      "loot": [
+        "coiled_sword"
+      ],
       "dialogues": [
         "\"...I SEE YOU, ASHEN ONE.\"",
         "\"THERE IS NO ESCAPE FROM DESTINY.\"",
@@ -168,14 +172,14 @@
           "weight": 0.2,
           "hits": 1,
           "windUp": 1200,
-          "dropDist": 250,
+          "dropDist": 100,
           "heavy": true,
           "cooldown": 2500,
           "windUpImgs": [
-            "gundyr.png"
+            "gundyr-pre-atk.png"
           ],
           "activeImgs": [
-            "gundyr.png"
+            "gundyr-atk.png"
           ]
         },
         {
@@ -187,10 +191,10 @@
           "heavy": false,
           "cooldown": 1800,
           "windUpImgs": [
-            "gundyr.png"
+            "gundyr-pre-atk.png"
           ],
           "activeImgs": [
-            "gundyr.png"
+            "gundyr-atk.png"
           ]
         },
         {
@@ -198,14 +202,14 @@
           "weight": 0.25,
           "hits": 3,
           "windUp": 500,
-          "dropDist": 180,
+          "dropDist": 100,
           "heavy": false,
           "cooldown": 3000,
           "windUpImgs": [
-            "gundyr.png"
+            "gundyr-pre-atk.png"
           ],
           "activeImgs": [
-            "gundyr.png"
+            "gundyr-atk.png"
           ]
         },
         {
@@ -213,14 +217,14 @@
           "weight": 0.15,
           "hits": 1,
           "windUp": 1500,
-          "dropDist": 300,
+          "dropDist": 100,
           "heavy": true,
           "cooldown": 3500,
           "windUpImgs": [
-            "gundyr.png"
+            "gundyr-pre-atk.png"
           ],
           "activeImgs": [
-            "gundyr.png"
+            "gundyr-atk.png"
           ]
         },
         {
@@ -228,14 +232,14 @@
           "weight": 0.1,
           "hits": 2,
           "windUp": 800,
-          "dropDist": 220,
+          "dropDist": 110,
           "heavy": true,
           "cooldown": 2800,
           "windUpImgs": [
-            "gundyr.png"
+            "gundyr-pre-atk.png"
           ],
           "activeImgs": [
-            "gundyr.png"
+            "gundyr-atk.png"
           ]
         }
       ]

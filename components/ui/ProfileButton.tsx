@@ -27,7 +27,7 @@ const INITIAL_MAIL = [
 
 const DIFFICULTIES = ['EASY', 'NORMAL', 'HARD'] as const;
 
-export function ProfileButton({ hp = 100 }: { hp?: number }) {
+export function ProfileButton({ hp = 100, containerStyle }: { hp?: number, containerStyle?: any }) {
   const [modalVisible, setModalVisible] = useState(false);
   const [mailModalVisible, setMailModalVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
@@ -51,7 +51,7 @@ export function ProfileButton({ hp = 100 }: { hp?: number }) {
   };
 
   return (
-    <View style={styles.navbarContainer}>
+    <View style={[styles.navbarContainer, containerStyle]}>
       
       {/* Left HUD Layout */}
       <TouchableOpacity style={styles.hudContainer} onPress={() => setModalVisible(true)} activeOpacity={0.8}>
@@ -316,7 +316,6 @@ export function ProfileButton({ hp = 100 }: { hp?: number }) {
 
 const styles = StyleSheet.create({
   navbarContainer: {
-    width: '100%',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -326,12 +325,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     height: 60,
-    width: 250,
+    marginRight: 6,
   },
   barBg: {
     marginLeft: 30,
     paddingLeft: 35,
-    width: 200,
+    flex: 1, // Changed from fixed width 200
     height: 48,
     backgroundColor: '#262421',
     borderTopRightRadius: 8,
@@ -341,6 +340,7 @@ const styles = StyleSheet.create({
     borderColor: '#3a3a3a',
     borderLeftWidth: 0,
     position: 'relative',
+    maxWidth: 160, // Smaller maxWidth for more compact header
   },
   nameSection: {
     flexDirection: 'row',

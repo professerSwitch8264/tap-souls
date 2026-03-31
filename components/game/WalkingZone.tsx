@@ -1,7 +1,8 @@
 import { FontAwesome5 } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import React, { useRef, useState } from 'react';
-import { Animated, Image, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Animated, Image, Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { FRAME_HEIGHT, FRAME_WIDTH } from "../../constants/GameConfig";
 import { HERO_IMAGES, getEnemyImageByEnemyId, getGameImage } from "../../constants/ImageRegistry";
 import enemyData from "../../data/enemies.json";
@@ -20,28 +21,32 @@ const TILE_TYPE_CONFIG: Record<string, { icon: string; color: string; label: str
 export interface WalkingZoneProps {
   tiles: any[];
   currentTileIndex: number;
-  moveToNextTile: () => void;
-  moveToPreviousTile: () => void;
+  moveToNextTile?: () => void;
+  moveToPreviousTile?: () => void;
+  moveInDirection: (dir: 'UP' | 'DOWN' | 'LEFT' | 'RIGHT') => boolean;
   defeatedTiles: number[];
+  exploredTiles: number[];
   hp: number;
   onEncounter: (enemyId?: string) => void;
   onRest: () => void;
   onMapComplete: () => void;
   onReturnToMap: () => void;
+  mapId: string;
   mapName: string;
 }
 
 export function WalkingZone({
   tiles,
   currentTileIndex,
-  moveToNextTile,
-  moveToPreviousTile,
+  moveInDirection,
   defeatedTiles = [],
+  exploredTiles = [],
   hp = 100,
   onEncounter,
   onRest,
   onMapComplete,
   onReturnToMap,
+  mapId,
   mapName,
 }: WalkingZoneProps) {
   const currentTile = tiles[currentTileIndex];
@@ -66,6 +71,7 @@ export function WalkingZone({
   // Encounter Interaction States
   const [encounterPhase, setEncounterPhase] = useState<'CHOICE' | 'TALK'>('CHOICE');
   const [activeDialogue, setActiveDialogue] = useState<string | null>(null);
+  const [isFullMapOpen, setIsFullMapOpen] = useState(false);
 
   // If no tiles or invalid index, show map complete
   if (!currentTile) {
@@ -87,63 +93,73 @@ export function WalkingZone({
 
   const tileConfig = TILE_TYPE_CONFIG[currentTile.type] || TILE_TYPE_CONFIG.path;
 
-  const handleStep = () => {
+  const handleMove = (direction: 'UP' | 'DOWN' | 'LEFT' | 'RIGHT') => {
     if (isMoving) return;
+    
+    // Check if move is valid via hook
+    const success = moveInDirection(direction);
+    if (!success) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      return;
+    }
 
-    // If on bonfire, don't auto-move (player needs to press REST or TAP to continue)
-    // If on enemy/boss, don't auto-move (need to fight first via encounter)
     setIsMoving(true);
-
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    // Walking animation
+    // Direction-based slide animation
+    const slideTo = direction === 'UP' || direction === 'LEFT' ? -20 : 20;
+    const isVertical = direction === 'UP' || direction === 'DOWN';
+
     Animated.parallel([
       Animated.sequence([
-        Animated.timing(walkAnim, { toValue: -10, duration: 150, useNativeDriver: true }),
+        Animated.timing(walkAnim, { toValue: slideTo, duration: 150, useNativeDriver: true }),
         Animated.timing(walkAnim, { toValue: 0, duration: 150, useNativeDriver: true }),
       ]),
       Animated.sequence([
-        Animated.timing(envScale, { toValue: 1.2, duration: 300, useNativeDriver: true }),
-        Animated.timing(envScale, { toValue: 1, duration: 0, useNativeDriver: true }),
-      ]),
-      Animated.sequence([
-        Animated.timing(envOpacity, { toValue: 1, duration: 150, useNativeDriver: true }),
-        Animated.timing(envOpacity, { toValue: 0.5, duration: 150, useNativeDriver: true }),
-      ]),
-      // Object bounce
-      Animated.sequence([
-        Animated.timing(objectScale, { toValue: 1.1, duration: 150, useNativeDriver: true }),
-        Animated.timing(objectScale, { toValue: 1, duration: 150, useNativeDriver: true }),
+        Animated.timing(envScale, { toValue: 1.1, duration: 150, useNativeDriver: true }),
+        Animated.timing(envScale, { toValue: 1, duration: 150, useNativeDriver: true }),
       ]),
     ]).start(() => {
       setIsMoving(false);
-      moveToNextTile();
     });
 
     setFrameX(f => (f + 1) % 3);
   };
 
-  const handleBackwardStep = () => {
-    if (isMoving || isFirstTile) return;
-    setIsMoving(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  const handleStep = () => {
+    // Legacy fallback for linear maps if still used (not needed for 2D)
+    handleMove('UP');
+  };
 
-    Animated.parallel([
-      Animated.sequence([
-        Animated.timing(walkAnim, { toValue: -10, duration: 150, useNativeDriver: true }),
-        Animated.timing(walkAnim, { toValue: 0, duration: 150, useNativeDriver: true }),
-      ]),
-      Animated.sequence([
-        Animated.timing(envScale, { toValue: 0.8, duration: 300, useNativeDriver: true }),
-        Animated.timing(envScale, { toValue: 1, duration: 0, useNativeDriver: true }),
-      ]),
-    ]).start(() => {
-      setIsMoving(false);
-      moveToPreviousTile();
+  const hasAction = (currentTile.type === 'bonfire') || 
+                    ((currentTile.type === 'enemy' || currentTile.type === 'boss') && !isDefeated) || 
+                    currentTile.type === 'chest';
+
+  // Swipe Gesture logic
+  const panGesture = Gesture.Pan()
+    .runOnJS(true)
+    .onEnd((e) => {
+      const { translationX, translationY } = e;
+      const threshold = 40;
+
+      if (Math.abs(translationX) > Math.abs(translationY)) {
+        // Horizontal swipe
+        if (translationX > threshold) handleMove('RIGHT');
+        else if (translationX < -threshold) handleMove('LEFT');
+      } else {
+        // Vertical swipe
+        if (translationY > threshold) handleMove('DOWN');
+        else if (translationY < -threshold) handleMove('UP');
+      }
     });
 
-    setFrameX(f => (f + 1) % 3);
-  };
+  const tapGesture = Gesture.Tap()
+    .runOnJS(true)
+    .onEnd(() => {
+       if (!hasAction) handleStep();
+    });
+
+  const composedGesture = Gesture.Exclusive(panGesture, tapGesture);
 
   const handleTalk = () => {
     const enemy = enemyData.enemies.find(e => e.id === currentTile.enemyId);
@@ -171,7 +187,7 @@ export function WalkingZone({
     if (success) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       alert("Escaped successfully! You retreat to safety.");
-      handleBackwardStep();
+      handleMove('DOWN');
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       alert("Failed to flee! The enemy blocks your way!");
@@ -186,231 +202,291 @@ export function WalkingZone({
       onRest();
     } else if ((currentTile.type === 'enemy' || currentTile.type === 'boss') && !isDefeated) {
       onEncounter(currentTile.enemyId || undefined);
-    } else if (currentTile.type === 'chest') {
-      // TODO: Implement chest opening
+    } else if (currentTile.type === 'chest' || currentTile.loot) {
+      // Collect loot!
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      alert(`Found: ${currentTile.loot?.souls || 0} souls!`);
-      handleStep(); // Auto-advance after collecting
+      const souls = currentTile.loot?.souls || 0;
+      const items = currentTile.loot?.items || [];
+      
+      let message = "";
+      if (souls > 0) message += `Found: ${souls} souls! `;
+      if (items.length > 0) message += `Found: ${items.join(', ')}!`;
+      
+      if (message) alert(message);
+      
+      // Mark as defeated/collected if it's a chest or has loot
+      onEncounter("loot_collected"); // Dummy call to mark tile, or we should have onDefeat
+      // Actually we'll just check if it's defeated/collected
+      handleMove('UP'); // Auto-advance? Maybe not in 2D. 
     }
   };
 
-  const hasAction = (currentTile.type === 'bonfire') || 
-                    ((currentTile.type === 'enemy' || currentTile.type === 'boss') && !isDefeated) || 
-                    currentTile.type === 'chest';
+
 
   return (
     <View style={styles.container}>
-      {/* Top HUD - Two Row Stacked Layout */}
+      {/* Top HUD - Clean profile & Map Name */}
       <View style={styles.topHud}>
-        {/* ROW 1: Profile */}
         <View style={styles.topHudMain}>
-          <ProfileButton hp={hp} />
-        </View>
-        
-        {/* ROW 2: Map Info (Moved Down) */}
-        <View style={styles.topHudInfoRow}>
-          <Text style={styles.mapTitle} numberOfLines={1}>{mapName.toUpperCase()}</Text>
-          <View style={styles.progressBadge}>
-            <Text style={styles.progressText}>{currentTileIndex + 1} / {totalTiles}</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Progress Bar */}
-      <View style={styles.progressBarContainer}>
-        <View style={styles.progressBarBg}>
-          <View style={[styles.progressBarFill, { width: `${((currentTileIndex + 1) / totalTiles) * 100}%` }]} />
-        </View>
-        {/* Tile dots */}
-        <View style={styles.dotsRow}>
-          {tiles.map((tile, i) => {
-            const dotConfig = TILE_TYPE_CONFIG[tile.type] || TILE_TYPE_CONFIG.path;
-            const isPast = i < currentTileIndex;
-            const isCurrent = i === currentTileIndex;
-            return (
-              <View
-                key={i}
-                style={[
-                  styles.dot,
-                  { backgroundColor: isPast ? '#333' : isCurrent ? dotConfig.color : '#1a1a1a' },
-                  isCurrent && { borderColor: dotConfig.color, borderWidth: 2, width: 14, height: 14, borderRadius: 7 },
-                ]}
-              />
-            );
-          })}
-        </View>
-      </View>
-
-      {/* Main Scene */}
-      <TouchableOpacity
-        activeOpacity={1}
-        style={styles.walkingArea}
-        onPress={hasAction ? undefined : handleStep}
-      >
-        {/* Background */}
-        <Animated.View style={[styles.envLayer, { transform: [{ scale: envScale }], opacity: envOpacity }]}>
-          <View style={styles.forestPath} />
-          <View style={styles.fogOverlay} />
-        </Animated.View>
-
-        {/* Tile Object - Show actual image */}
-        {(() => {
-          // Priority: enemy image > tile image > icon fallback
-          const enemyImg = currentTile.enemyId ? getEnemyImageByEnemyId(currentTile.enemyId) : null;
-          const tileImg = currentTile.image ? getGameImage(currentTile.image) : null;
-          const displayImg = enemyImg || tileImg;
-
-          if (displayImg) {
-            return (
-              <Animated.View style={[
-                styles.tileObjectContainer, 
-                { transform: [{ scale: objectScale }], opacity: isDefeated ? 0.3 : 1 } 
-              ]}>
-                {isDefeated && (
-                  <View style={styles.defeatedOverlay}>
-                    <FontAwesome5 name="skull" size={24} color="#555" />
-                  </View>
-                )}
-                <Image
-                  source={displayImg}
-                  style={[
-                    styles.tileObjectImage,
-                    // Enemy/boss images are bigger
-                    (currentTile.type === 'enemy' || currentTile.type === 'boss') && styles.enemyObjectImage,
-                  ]}
-                  resizeMode="contain"
-                />
-              </Animated.View>
-            );
-          }
-
-          // Fallback: icon for tiles without images (path, event, etc.)
-          return (
-            <View style={styles.tileIconContainer}>
-              <View style={[styles.tileIconCircle, { borderColor: tileConfig.color }]}>
-                <FontAwesome5 name={tileConfig.icon as any} size={40} color={tileConfig.color} />
+          <ProfileButton hp={hp} containerStyle={{ flex: 1 }} />
+          
+          <View style={styles.topHeaderGroup}>
+            <View style={styles.topHeaderInfo}>
+              <Text style={styles.mapTitle} numberOfLines={1}>{mapName.toUpperCase()}</Text>
+              <View style={styles.progressRow}>
+                 <Text style={styles.progressTextSmall}>{Math.round((exploredTiles.length / totalTiles) * 100)}%</Text>
               </View>
             </View>
-          );
-        })()}
 
-        {/* Player Character */}
-        <Animated.View style={[
-          styles.spriteContainer,
-          styles.playerSprite,
-          { transform: [{ translateY: walkAnim }] }
-        ]}>
-          <View style={styles.spriteWindow}>
-            <Image
-              source={HERO_IMAGES.ashenOne}
-              style={[
-                styles.spritesheet,
-                {
-                  left: -frameX * FRAME_WIDTH,
-                  top: 0,
-                }
-              ]}
-            />
-          </View>
-        </Animated.View>
-      </TouchableOpacity>
-
-      {/* Bottom HUD - Tile info + actions */}
-      <View style={styles.bottomHud}>
-        <Text style={[styles.tileName, { color: isDefeated ? '#444' : tileConfig.color }]}>
-          {isDefeated ? "EMPTY" : tileConfig.label}: {currentTile.name.toUpperCase()}
-          {isDefeated && " (DEFEATED)"}
-        </Text>
-        <Text style={styles.tileDesc}>
-          {isDefeated ? "A fallen foe lies here. Nothing remains." : currentTile.description}
-        </Text>
-
-        {/* Action Buttons */}
-        <View style={styles.actionRow}>
-          {currentTile.type === 'bonfire' && (
-            <>
-              <TouchableOpacity style={[styles.actionBtn, styles.restActionBtn]} onPress={handleTileAction}>
-                <FontAwesome5 name="fire" size={14} color="#fff" />
-                <Text style={styles.actionText}>REST</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.actionBtn, styles.continueBtn]} onPress={handleStep}>
-                <FontAwesome5 name="walking" size={14} color="#fff" />
-                <Text style={styles.actionText}>CONTINUE</Text>
-              </TouchableOpacity>
-            </>
-          )}
-
-          {(currentTile.type === 'enemy' || currentTile.type === 'boss') && !isDefeated && (
-            encounterPhase === 'CHOICE' ? (
-              <View style={styles.choiceGroup}>
-                <TouchableOpacity style={[styles.choiceBtn, styles.fightChoice]} onPress={handleTileAction}>
-                  <FontAwesome5 name="fist-raised" size={14} color="#fff" />
-                  <Text style={styles.choiceText}>FIGHT</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.choiceBtn, styles.talkChoice]} onPress={handleTalk}>
-                  <FontAwesome5 name="comment" size={14} color="#fff" />
-                  <Text style={styles.choiceText}>TALK</Text>
-                </TouchableOpacity>
-                {(() => {
-                  const enemy = enemyData.enemies.find(e => e.id === currentTile.enemyId);
-                  const fleeChance = enemy?.flee_chance ?? 0;
-                  if (fleeChance > 0) {
-                    return (
-                      <TouchableOpacity style={[styles.choiceBtn, styles.fleeChoice]} onPress={handleFlee}>
-                        <Text style={styles.choiceText}>FLEE ({Math.round(fleeChance * 100)}%)</Text>
-                      </TouchableOpacity>
-                    );
-                  }
-                  return null;
-                })()}
-              </View>
-            ) : (
-              <View style={styles.dialogueBox}>
-                <Text style={styles.dialogueText}>{activeDialogue}</Text>
-                <TouchableOpacity style={styles.dialogueNext} onPress={() => setEncounterPhase('CHOICE')}>
-                  <Text style={styles.dialogueNextText}>CONTINUE</Text>
-                </TouchableOpacity>
-              </View>
-            )
-          )}
-
-          {currentTile.type === 'chest' && (
-            <TouchableOpacity style={[styles.actionBtn, styles.chestActionBtn]} onPress={handleTileAction}>
-              <FontAwesome5 name="box-open" size={14} color="#fff" />
-              <Text style={styles.actionText}>OPEN</Text>
+            <TouchableOpacity style={styles.fullMapToggle} onPress={() => setIsFullMapOpen(true)}>
+              <FontAwesome5 name="map-marked-alt" size={14} color="#ffd54f" />
             </TouchableOpacity>
-          )}
+          </View>
+        </View>
+      </View>
 
-          {(currentTile.type === 'path' || currentTile.type === 'event' || isDefeated) && (
-            <View style={styles.movementActions}>
+      {/* Floating Interaction Hub (MIDDLE-RIGHT) - Soul Actions */}
+      <View style={styles.floatingInteractionHub}>
+        {currentTile.type === 'bonfire' && (
+          <TouchableOpacity 
+            style={[styles.soulActionBtn, styles.restActionBorder]} 
+            onPress={handleTileAction}
+            activeOpacity={0.7}
+          >
+            <FontAwesome5 name="fire" size={20} color="#ff9800" />
+            <Text style={styles.soulActionText}>REST</Text>
+          </TouchableOpacity>
+        )}
+
+        {(currentTile.type === 'enemy' || currentTile.type === 'boss') && !isDefeated && (
+          encounterPhase === 'CHOICE' ? (
+            <View style={styles.soulActionStack}>
               <TouchableOpacity 
-                style={[styles.moveBtn, isFirstTile && styles.moveBtnDisabled]} 
-                onPress={handleBackwardStep}
-                disabled={isFirstTile || isMoving}
+                style={[styles.soulActionBtn, styles.fightActionBorder]} 
+                onPress={handleTileAction}
+                activeOpacity={0.7}
               >
-                <FontAwesome5 name="arrow-left" size={12} color="#fff" />
-                <Text style={styles.moveBtnText}>BACK</Text>
+                <FontAwesome5 name="fist-raised" size={20} color="#ff4444" />
+                <Text style={styles.soulActionText}>FIGHT</Text>
               </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={[styles.moveBtn, styles.forwardBtn, isLastTile && styles.moveBtnDisabled]} 
-                onPress={handleStep}
-                disabled={isLastTile || isMoving}
-              >
-                <Text style={styles.moveBtnText}>WALK</Text>
-                <FontAwesome5 name="arrow-right" size={12} color="#fff" />
+              <TouchableOpacity style={styles.soulSubActionBtn} onPress={handleTalk}>
+                <FontAwesome5 name="comment" size={10} color="#fff" />
               </TouchableOpacity>
             </View>
-          )}
-        </View>
+          ) : (
+            <View style={styles.floatingDialogue}>
+              <Text style={styles.floatingDialogueText}>{activeDialogue}</Text>
+              <TouchableOpacity style={styles.dialogueNext} onPress={() => setEncounterPhase('CHOICE')}>
+                <Text style={styles.dialogueNextText}>CONTINUE</Text>
+              </TouchableOpacity>
+            </View>
+          )
+        )}
 
-        {isLastTile && currentTile.type !== 'enemy' && currentTile.type !== 'boss' && (
-          <TouchableOpacity style={styles.mapCompleteBtn} onPress={onMapComplete}>
-            <FontAwesome5 name="flag-checkered" size={14} color="#ffd54f" />
-            <Text style={styles.mapCompleteText}>AREA COMPLETE – RETURN TO MAP</Text>
+        {currentTile.type === 'chest' && (
+          <TouchableOpacity 
+            style={[styles.soulActionBtn, styles.chestActionBorder]} 
+            onPress={handleTileAction}
+            activeOpacity={0.7}
+          >
+            <FontAwesome5 name="box-open" size={20} color="#ffd54f" />
+            <Text style={styles.soulActionText}>OPEN</Text>
           </TouchableOpacity>
         )}
       </View>
+
+      {/* Main Scene */}
+      <GestureDetector gesture={composedGesture}>
+        <View style={styles.walkingArea}>
+          {/* Background */}
+          <Animated.View style={[styles.envLayer, { transform: [{ scale: envScale }], opacity: envOpacity }]}>
+            <View style={styles.forestPath} />
+            <View style={styles.fogOverlay} />
+          </Animated.View>
+
+          {/* Tile Object - Show actual image */}
+          {(() => {
+            const enemyImg = currentTile.enemyId ? getEnemyImageByEnemyId(currentTile.enemyId) : null;
+            const tileImg = currentTile.image ? getGameImage(currentTile.image) : null;
+            const displayImg = enemyImg || tileImg;
+
+            if (displayImg) {
+              return (
+                <Animated.View style={[
+                  styles.tileObjectContainer, 
+                  { transform: [{ scale: objectScale }], opacity: isDefeated ? 0.3 : 1 } 
+                ]}>
+                  {isDefeated && (
+                    <View style={styles.defeatedOverlay}>
+                      <FontAwesome5 name="skull" size={24} color="#555" />
+                    </View>
+                  )}
+                  <Image
+                    source={displayImg}
+                    style={[
+                      styles.tileObjectImage,
+                      (currentTile.type === 'enemy' || currentTile.type === 'boss') && styles.enemyObjectImage,
+                    ]}
+                    resizeMode="contain"
+                  />
+                </Animated.View>
+              );
+            }
+
+            return (
+              <View style={styles.tileIconContainer}>
+                <View style={[styles.tileIconCircle, { borderColor: tileConfig.color }]}>
+                  <FontAwesome5 name={tileConfig.icon as any} size={40} color={tileConfig.color} />
+                </View>
+              </View>
+            );
+          })()}
+
+          {/* Player Character */}
+          <Animated.View style={[
+            styles.spriteContainer,
+            styles.playerSprite,
+            { transform: [{ translateY: walkAnim }] }
+          ]}>
+            <View style={styles.spriteWindow}>
+              <Image
+                source={HERO_IMAGES.ashenOne}
+                style={[
+                  styles.spritesheet,
+                  {
+                    left: -frameX * FRAME_WIDTH,
+                    top: 0,
+                  }
+                ]}
+              />
+            </View>
+          </Animated.View>
+        </View>
+      </GestureDetector>
+
+      {/* Bottom HUD - Tactical Dashboard */}
+      <View style={styles.bottomHud}>
+        <View style={styles.tileInfoContainer}>
+          <Text style={[styles.tileName, { color: isDefeated ? '#444' : tileConfig.color }]}>
+            {isDefeated ? "EMPTY" : tileConfig.label}: {currentTile.name.toUpperCase()}
+          </Text>
+          <Text style={styles.tileDesc} numberOfLines={2}>
+            {isDefeated ? "A fallen foe lies here. Nothing remains." : currentTile.description}
+          </Text>
+        </View>
+
+        <View style={styles.bottomNavRow}>
+           {/* Tactical Mini-Map centered */}
+           <TouchableOpacity 
+             activeOpacity={0.8}
+             style={styles.tacticalMapPanel} 
+             onPress={() => setIsFullMapOpen(true)}
+           >
+             <View style={styles.miniMapGrid}>
+               {[1, 0, -1].map(dy => (
+                 <View key={dy} style={styles.miniMapRow}>
+                   {[-1, 0, 1].map(dx => {
+                     const targetX = (currentTile as any).x + dx;
+                     const targetY = (currentTile as any).y + dy;
+                     const tile = tiles.find(t => t.x === targetX && t.y === targetY);
+                     const tIdx = tile ? tiles.indexOf(tile) : -1;
+                     const isExplored = exploredTiles.includes(tIdx);
+                     const isCurrent = dx === 0 && dy === 0;
+
+                     return (
+                       <View 
+                         key={dx} 
+                         style={[
+                           styles.miniMapCell,
+                           isCurrent && styles.miniMapCellCurrent,
+                           tile && isExplored && { borderColor: (TILE_TYPE_CONFIG[tile.type]?.color || '#333') + '66' },
+                           !tile && styles.miniMapCellEmpty
+                         ]} 
+                       >
+                         {tile && isExplored && (
+                           <FontAwesome5 
+                             name={TILE_TYPE_CONFIG[tile.type]?.icon as any} 
+                             size={5} 
+                             color={isCurrent ? '#fff' : (TILE_TYPE_CONFIG[tile.type]?.color || '#444') + 'aa'} 
+                           />
+                         )}
+                       </View>
+                     );
+                   })}
+                 </View>
+               ))}
+             </View>
+           </TouchableOpacity>
+        </View>
+
+        {isLastTile && currentTile.type !== 'enemy' && currentTile.type !== 'boss' && (
+          <TouchableOpacity style={styles.mobileMapCompleteBtn} onPress={onMapComplete}>
+            <FontAwesome5 name="flag-checkered" size={12} color="#ffd54f" />
+            <Text style={styles.mobileMapCompleteText}>AREA COMPLETE</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* FULL SCREEN MASTER MAP MODAL */}
+      <Modal visible={isFullMapOpen} transparent animationType="fade" onRequestClose={() => setIsFullMapOpen(false)}>
+        <View style={styles.masterMapOverlay}>
+          <View style={styles.masterMapContainer}>
+            <View style={styles.masterMapHeader}>
+              <Text style={styles.masterMapTitle}>MASTER MAP: {mapName.toUpperCase()}</Text>
+              <TouchableOpacity style={styles.closeBtn} onPress={() => setIsFullMapOpen(false)}>
+                <FontAwesome5 name="times" size={20} color="#fff" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.masterMapGrid}>
+              {Array.from({ length: 11 }, (_, i) => 5 - i).map(dy => (
+                <View key={dy} style={styles.masterMapRow}>
+                  {Array.from({ length: 11 }, (_, i) => i - 5).map(dx => {
+                    const targetX = (currentTile as any).x + dx;
+                    const targetY = (currentTile as any).y + dy;
+                    const tile = tiles.find(t => t.x === targetX && t.y === targetY);
+                    const tIdx = tile ? tiles.indexOf(tile) : -1;
+                    const isExplored = exploredTiles.includes(tIdx);
+                    const isCurrent = dx === 0 && dy === 0;
+
+                    return (
+                      <View 
+                        key={dx} 
+                        style={[
+                          styles.masterMapCell,
+                          isCurrent && styles.masterMapCellCurrent,
+                          tile && isExplored && { borderColor: TILE_TYPE_CONFIG[tile.type]?.color + 'aa' || '#333' },
+                          !tile && styles.masterMapCellEmpty
+                        ]} 
+                      >
+                        {tile && isExplored && (
+                          <FontAwesome5 
+                            name={TILE_TYPE_CONFIG[tile.type]?.icon as any} 
+                            size={12} 
+                            color={isCurrent ? '#fff' : (TILE_TYPE_CONFIG[tile.type]?.color || '#444')} 
+                          />
+                        )}
+                      </View>
+                    );
+                  })}
+                </View>
+              ))}
+            </View>
+
+            <View style={styles.masterMapFooter}>
+              <View style={styles.legendRow}>
+                {Object.entries(TILE_TYPE_CONFIG).map(([type, cfg]) => (
+                  <View key={type} style={styles.legendItem}>
+                    <FontAwesome5 name={cfg.icon as any} size={10} color={cfg.color} />
+                    <Text style={styles.legendText}>{cfg.label}</Text>
+                  </View>
+                ))}
+              </View>
+              <Text style={styles.masterMapStats}>EXPLORATION PROGRESS: {Math.round((exploredTiles.length / totalTiles) * 100)}%</Text>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -430,8 +506,9 @@ const styles = StyleSheet.create({
   topHudMain: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
+    width: '100%',
+    gap: 4,
   },
   topHudInfoRow: {
     flexDirection: 'row',
@@ -472,9 +549,55 @@ const styles = StyleSheet.create({
     borderColor: '#222',
   },
   backText: { color: '#888', fontSize: 9, fontWeight: 'bold', letterSpacing: 1 },
+  topHeaderGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderRadius: 20,
+    paddingLeft: 10,
+    paddingRight: 4,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: '#222',
+    maxWidth: 140,
+  },
+  topHeaderInfo: {
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+    flexShrink: 1,
+  },
+  progressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 1,
+  },
+  progressBarBgSmall: {
+    display: 'none', // Remove bar to save space in header
+    width: 40,
+    height: 3,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressTextSmall: {
+    color: '#888',
+    fontSize: 9,
+    fontWeight: 'bold',
+  },
+  fullMapToggle: {
+    width: 32,
+    height: 32,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,213,79,0.2)',
+  },
   mapTitle: {
     color: '#ffb300',
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: 'bold',
     letterSpacing: 2,
     fontFamily: Platform.select({ ios: 'Georgia', android: 'serif', default: 'serif' }),
@@ -523,8 +646,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#0a0a0a',
     borderColor: '#1a1a1a',
     borderWidth: 1,
-    borderLeftWidth: 50,
-    borderRightWidth: 50,
+    borderLeftWidth: Platform.OS === 'web' ? 100 : 50,
+    borderRightWidth: Platform.OS === 'web' ? 100 : 50,
   },
   fogOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -766,12 +889,255 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 10,
     marginTop: 12,
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderWidth: 1,
     borderColor: '#ffd54f',
     backgroundColor: 'rgba(255,213,79,0.1)',
-    borderRadius: 4,
+    borderRadius: 8,
   },
+
+  // Layout Swap Redesign
+  floatingInteractionHub: {
+    position: 'absolute',
+    right: 20,
+    top: '38%', // Adjusted for middle-right thumb reach
+    zIndex: 60,
+    alignItems: 'flex-end',
+    gap: 15,
+  },
+  soulActionBtn: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: 'rgba(0,0,0,0.88)',
+    borderWidth: 1.5,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.7,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  restActionBorder: { borderColor: '#ff9800' },
+  fightActionBorder: { borderColor: '#ff4444' },
+  chestActionBorder: { borderColor: '#ffd54f' },
+  soulActionText: {
+    color: '#fff',
+    fontSize: 8,
+    fontWeight: 'bold',
+    marginTop: 2,
+    letterSpacing: 1.5,
+  },
+  soulActionStack: { position: 'relative' },
+  soulSubActionBtn: {
+    position: 'absolute',
+    top: -5,
+    left: -5,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#3296ff',
+    borderWidth: 1,
+    borderColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  floatingDialogue: {
+    width: 180,
+    padding: 12,
+    backgroundColor: 'rgba(0,0,0,0.9)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#3296ff',
+  },
+  floatingDialogueText: {
+    color: '#eee',
+    fontSize: 11,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+
+  // Tactical Integrated Mini-Map
+  tacticalMapPanel: {
+    width: 80,
+    height: 80,
+    backgroundColor: 'rgba(5,5,5,0.95)',
+    borderRadius: 8,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,152,0,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  miniMapGrid: { gap: 2 },
+  miniMapRow: { flexDirection: 'row', gap: 2 },
+  miniMapCell: {
+    width: 14,
+    height: 14,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderRadius: 2,
+    borderWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  miniMapCellEmpty: { opacity: 0.05 },
+  miniMapCellCurrent: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderColor: '#fff',
+    borderWidth: 1,
+  },
+
+  // Bottom Nav Row optimization
+  tileInfoContainer: {
+    width: '100%',
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#111',
+  },
+  bottomNavRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center', // Now centered since D-Pad is gone
+    paddingTop: 10,
+    minHeight: 100,
+  },
+  movementZone: {
+    display: 'none',
+  },
+  mobileMapCompleteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 5,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(255,213,79,0.05)',
+    borderRadius: 8,
+  },
+  mobileMapCompleteText: {
+    color: '#ffd54f',
+    fontSize: 10,
+    fontWeight: 'bold',
+    letterSpacing: 2,
+  },
+
+  // D-Pad refinements (already correct but ensure consistent sizing)
+  compassContainer: { display: 'none' },
+  compassMiddleRow: { display: 'none' },
+  compassBtn: { display: 'none' },
+  compassCenter: { display: 'none' },
+  compassInnerCircle: { display: 'none' },
+  compassUP: { display: 'none' },
+  compassDOWN: { display: 'none' },
+  compassLEFT: { display: 'none' },
+  compassRIGHT: { display: 'none' },
+
+  // Master Map Modal (Mobile Adapative)
+  masterMapOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.92)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  masterMapContainer: {
+    width: '94%',
+    maxWidth: 380,
+    maxHeight: '85%',
+    backgroundColor: '#0a0a0a',
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#1a1a1a',
+    padding: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.8,
+    shadowRadius: 20,
+    elevation: 20,
+  },
+  masterMapHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1a1a1a',
+  },
+  masterMapTitle: {
+    color: '#ffb300',
+    fontSize: 14,
+    fontWeight: 'bold',
+    letterSpacing: 1.5,
+  },
+  closeBtn: { padding: 8 },
+  masterMapGrid: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2.5,
+    padding: 8,
+    backgroundColor: '#050505',
+    borderRadius: 12,
+    transform: [{ scale: 0.95 }], // Scale down slightly to ensure fit
+  },
+  masterMapRow: { flexDirection: 'row', gap: 2.5 },
+  masterMapCell: {
+    width: 20, // Slightly smaller cells for mobile
+    height: 20,
+    backgroundColor: '#111',
+    borderRadius: 3,
+    borderWidth: 0.5,
+    borderColor: '#1a1a1a',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  masterMapCellEmpty: { opacity: 0.1 },
+  masterMapCellCurrent: {
+    backgroundColor: '#222',
+    borderColor: '#fff',
+    borderWidth: 1,
+  },
+  masterMapFooter: {
+    marginTop: 15,
+    borderTopWidth: 1,
+    borderTopColor: '#1a1a1a',
+    paddingTop: 10,
+  },
+  legendRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+    marginTop: 5,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  legendText: {
+    color: '#666',
+    fontSize: 9,
+    fontWeight: 'bold',
+  },
+  masterMapStats: {
+    color: '#444',
+    fontSize: 9,
+    textAlign: 'center',
+    fontWeight: 'bold',
+    letterSpacing: 1,
+  },
+
+  // World Hints
+  directionalHints: { display: 'none' },
+  hintArrow: { display: 'none' },
+  hintUP: { display: 'none' },
+  hintDOWN: { display: 'none' },
+  hintLEFT: { display: 'none' },
+  hintRIGHT: { display: 'none' },
   mapCompleteText: {
     color: '#ffd54f',
     fontSize: 11,

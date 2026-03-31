@@ -6,6 +6,9 @@
 // ===== Enemy / Boss Images =====
 export const ENEMY_IMAGES: Record<string, any> = {
   "gundyr.png": require("@/assets/images/enemy/gundyr.png"),
+  "gundyr-idle.png": require("@/assets/images/enemy/gundyr-idle.png"),
+  "gundyr-pre-atk.png": require("@/assets/images/enemy/gundyr-pre-atk.png"),
+  "gundyr-atk.png": require("@/assets/images/enemy/gundyr-atk.png"),
   "lizard.png": require("@/assets/images/enemy/lizard.png"),
 };
 

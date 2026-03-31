@@ -2,21 +2,23 @@
   "maps": [
     {
       "id": "firelink_shrine",
-      "name": "Firelink Shrine",
+      "name": "Cemetery of Ash",
       "x": "20%",
       "y": "80%",
       "icon": "fire",
       "color": "#ff9800",
       "type": "bonfire",
-      "description": "A safe haven where the bonfire burns, linking the Ashen One to the world.",
+      "description": "A bleak land where the Unkindled rise, following the call of the bell.",
       "tiles": [
         {
           "index": 0,
+          "x": 0,
+          "y": 0,
           "type": "bonfire",
-          "name": "Firelink Bonfire",
-          "icon": "fire",
+          "name": "Gravesite",
+          "icon": "door-open",
           "color": "#ff9800",
-          "description": "Rest here to restore HP and save progress.",
+          "description": "Your journey begins here. The cold wind whispers through the graves.",
           "image": "resourse/bonfire.png",
           "canRest": true,
           "enemyId": null,
@@ -24,11 +26,13 @@
         },
         {
           "index": 1,
+          "x": 0,
+          "y": 1,
           "type": "path",
-          "name": "Ashen Path",
+          "name": "Icy Trail",
           "icon": "road",
           "color": "#555555",
-          "description": "A quiet trail leading away from the shrine.",
+          "description": "A narrow path carved through the frozen rocks.",
           "image": null,
           "canRest": false,
           "enemyId": null,
@@ -36,11 +40,13 @@
         },
         {
           "index": 2,
+          "x": 1,
+          "y": 1,
           "type": "path",
-          "name": "Ashen Path",
-          "icon": "road",
+          "name": "Forgotten Corner",
+          "icon": "arrow-alt-circle-right",
           "color": "#555555",
-          "description": "A quiet trail leading away from the shrine.",
+          "description": "A detour leading away from the main path.",
           "image": null,
           "canRest": false,
           "enemyId": null,
@@ -48,62 +54,154 @@
         },
         {
           "index": 3,
+          "x": 1,
+          "y": 0,
+          "type": "chest",
+          "name": "Cliff Edge",
+          "icon": "skull",
+          "color": "#ffd54f",
+          "description": "A corpse lies huddled at the edge of the cliff.",
+          "image": null,
+          "canRest": false,
+          "enemyId": null,
+          "loot": {
+            "souls": 200,
+            "items": ["Soul of a Deserted Corpse"]
+          }
+        },
+        {
+          "index": 4,
+          "x": 0,
+          "y": 2,
           "type": "enemy",
-          "name": "Lizard Soldier",
+          "name": "Hollow Sentry",
           "icon": "skull",
           "color": "#e0e0e0",
-          "description": "A wandering hollow blocks the path.",
+          "description": "A hollow soldier guards the middle of the trail.",
           "image": null,
           "canRest": false,
           "enemyId": "lizard_soldier",
           "loot": null
         },
         {
-          "index": 4,
-          "type": "path",
-          "name": "Ashen Path",
-          "icon": "road",
-          "color": "#555555",
-          "description": "A quiet trail leading away from the shrine.",
-          "image": null,
-          "canRest": false,
-          "enemyId": null,
-          "loot": null
-        },
-        {
           "index": 5,
+          "x": 0,
+          "y": 3,
           "type": "path",
-          "name": "Ashen Path",
+          "name": "Hallway of Ash",
           "icon": "road",
           "color": "#555555",
-          "description": "A quiet trail leading away from the shrine.",
+          "description": "An open corridor where the Estus burns bright.",
           "image": null,
           "canRest": false,
           "enemyId": null,
-          "loot": null
+          "loot": {
+            "souls": 0,
+            "items": ["Estus Flask Shard"]
+          }
         },
         {
           "index": 6,
+          "x": 1,
+          "y": 3,
+          "type": "path",
+          "name": "Ravenous Path",
+          "icon": "skull",
+          "color": "#ff4444",
+          "description": "The air grows heavy here. Something powerful lurks nearby.",
+          "image": null,
+          "canRest": false,
+          "enemyId": null,
+          "loot": null
+        },
+        {
+          "index": 7,
+          "x": 2,
+          "y": 3,
+          "type": "enemy",
+          "name": "Crystal Lizard Arena",
+          "icon": "dragon",
+          "color": "#3f51b5",
+          "description": "A massive, crystalline creature blocks the way.",
+          "image": null,
+          "canRest": false,
+          "enemyId": "raven_knight",
+          "loot": {
+            "souls": 2000,
+            "items": ["Titanite Scale"]
+          }
+        },
+        {
+          "index": 8,
+          "x": -1,
+          "y": 3,
           "type": "bonfire",
-          "name": "Firelink Bonfire",
+          "name": "Bonfire Overlook",
           "icon": "fire",
           "color": "#ff9800",
-          "description": "Rest here to restore HP and save progress.",
+          "description": "A bonfire flickers in the distance, overlooking the cemetery.",
           "image": "resourse/bonfire.png",
           "canRest": true,
           "enemyId": null,
           "loot": null
         },
         {
-          "index": 7,
+          "index": 9,
+          "x": 0,
+          "y": 4,
+          "type": "path",
+          "name": "Stone Stairs",
+          "icon": "shoe-prints",
+          "color": "#555555",
+          "description": "Worn stone steps lead down to the arena floor.",
+          "image": null,
+          "canRest": false,
+          "enemyId": null,
+          "loot": null
+        },
+        {
+          "index": 10,
+          "x": -1,
+          "y": 4,
+          "type": "path",
+          "name": "Upper Ridge",
+          "icon": "road",
+          "color": "#555555",
+          "description": "A high vantage point above the Iudex Arena.",
+          "image": null,
+          "canRest": false,
+          "enemyId": null,
+          "loot": {
+            "souls": 0,
+            "items": ["Firebombs"]
+          }
+        },
+        {
+          "index": 11,
+          "x": -1,
+          "y": 0,
           "type": "boss",
-          "name": "Iudex Gundyr",
+          "name": "Iudex Gundyr Arena",
           "icon": "crown",
           "color": "#ff1744",
-          "description": "The first great challenge. Defeat him to prove your worth.",
+          "description": "A massive kneeling knight waits in the center of the plaza.",
           "image": null,
           "canRest": false,
           "enemyId": "gundyr",
+          "loot": null
+        },
+        {
+          "index": 12,
+          "x": -1,
+          "y": -1,
+          "type": "path",
+          "name": "Path to Shrine",
+          "icon": "door-open",
+          "color": "#ffd54f",
+          "description": "The doors of Firelink Shrine lie ahead.",
+          "image": null,
+          "canRest": false,
+          "enemyId": null,
           "loot": null
         }
       ]
@@ -120,8 +218,10 @@
       "tiles": [
         {
           "index": 0,
+          "x": 0,
+          "y": 0,
           "type": "bonfire",
-          "name": "Burg Bonfire",
+          "name": "Burg Entrance",
           "icon": "fire",
           "color": "#ff9800",
           "description": "A temporary safe zone in the burg.",
@@ -141,7 +241,22 @@
       "color": "#9e9e9e",
       "type": "enemy",
       "description": "A massive stone structure teeming with dark secrets.",
-      "tiles": []
+      "tiles": [
+        {
+          "index": 0,
+          "x": 0,
+          "y": 0,
+          "type": "path",
+          "name": "Cathedral Gate",
+          "icon": "road",
+          "color": "#555555",
+          "description": "Massive stone doors block the entrance.",
+          "image": null,
+          "canRest": false,
+          "enemyId": null,
+          "loot": null
+        }
+      ]
     },
     {
       "id": "catacombs",
@@ -152,7 +267,22 @@
       "color": "#795548",
       "type": "enemy",
       "description": "A dark subterranean network filled with ancient skeletons.",
-      "tiles": []
+      "tiles": [
+        {
+          "index": 0,
+          "x": 0,
+          "y": 0,
+          "type": "path",
+          "name": "Cave Entry",
+          "icon": "road",
+          "color": "#555555",
+          "description": "The smell of death wafts from below.",
+          "image": null,
+          "canRest": false,
+          "enemyId": null,
+          "loot": null
+        }
+      ]
     },
     {
       "id": "anor_londo",
@@ -163,7 +293,22 @@
       "color": "#ffd54f",
       "type": "boss",
       "description": "The city of the gods, basking in eternal twilight.",
-      "tiles": []
+      "tiles": [
+        {
+          "index": 0,
+          "x": 0,
+          "y": 0,
+          "type": "path",
+          "name": "Golden Plaza",
+          "icon": "road",
+          "color": "#555555",
+          "description": "The sun shines perpetually on these golden walls.",
+          "image": null,
+          "canRest": false,
+          "enemyId": null,
+          "loot": null
+        }
+      ]
     }
   ]
 }

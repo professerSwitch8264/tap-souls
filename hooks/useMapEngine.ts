@@ -13,6 +13,7 @@ interface MapState {
   currentTileIndex: number;
   playerHp: number;
   defeatedTiles: Record<string, number[]>; // MapId -> [defeated index1, index2...]
+  exploredTiles: Record<string, number[]>; // MapId -> [explored index1, index2...]
 }
 
 const DEFAULT_STATE: MapState = {
@@ -23,6 +24,7 @@ const DEFAULT_STATE: MapState = {
   currentTileIndex: 0,
   playerHp: 100,
   defeatedTiles: {},
+  exploredTiles: {},
 };
 
 export function useMapEngine() {
@@ -33,6 +35,7 @@ export function useMapEngine() {
   const [currentTileIndex, setCurrentTileIndexState] = useState<number>(DEFAULT_STATE.currentTileIndex);
   const [playerHp, setPlayerHpState] = useState<number>(DEFAULT_STATE.playerHp);
   const [defeatedTiles, setDefeatedTilesState] = useState<Record<string, number[]>>(DEFAULT_STATE.defeatedTiles);
+  const [exploredTiles, setExploredTilesState] = useState<Record<string, number[]>>(DEFAULT_STATE.exploredTiles);
   const [isLoaded, setIsLoaded] = useState(false);
 
   // 1. Load from AsyncStorage on mount
@@ -59,6 +62,7 @@ export function useMapEngine() {
             setCurrentTileIndexState(parsed.currentTileIndex ?? DEFAULT_STATE.currentTileIndex);
             setPlayerHpState(parsed.playerHp ?? DEFAULT_STATE.playerHp);
             setDefeatedTilesState(parsed.defeatedTiles || DEFAULT_STATE.defeatedTiles);
+            setExploredTilesState(parsed.exploredTiles || DEFAULT_STATE.exploredTiles);
           }
         }
       } catch (e) {
@@ -83,6 +87,7 @@ export function useMapEngine() {
           currentTileIndex,
           playerHp,
           defeatedTiles,
+          exploredTiles,
         };
         await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
       } catch (e) {
@@ -90,7 +95,7 @@ export function useMapEngine() {
       }
     };
     saveState();
-  }, [currentNodeId, lastBonfireId, lastBonfireTileIndex, unlockedNodes, currentTileIndex, playerHp, defeatedTiles, isLoaded]);
+  }, [currentNodeId, lastBonfireId, lastBonfireTileIndex, unlockedNodes, currentTileIndex, playerHp, defeatedTiles, exploredTiles, isLoaded]);
 
   // Actions
   const setCurrentNodeId = (id: string) => {
@@ -98,6 +103,8 @@ export function useMapEngine() {
     if (!unlockedNodes.includes(id)) {
       setUnlockedNodesState((prev) => [...prev, id]);
     }
+    // Auto-explore the starting tile of a new map
+    markTileExplored(id, 0);
   };
 
   const moveToNextTile = () => {
@@ -108,12 +115,45 @@ export function useMapEngine() {
     setCurrentTileIndexState((prev) => Math.max(0, prev - 1));
   };
 
+  const moveInDirection = (direction: 'UP' | 'DOWN' | 'LEFT' | 'RIGHT') => {
+    const map = (mapsData.maps as any[]).find((m) => m.id === currentNodeId);
+    if (!map) return false;
+
+    const currentTile = map.tiles[currentTileIndex];
+    if (!currentTile) return false;
+
+    let targetX = (currentTile as any).x ?? 0;
+    let targetY = (currentTile as any).y ?? 0;
+
+    if (direction === 'UP') targetY += 1;
+    if (direction === 'DOWN') targetY -= 1;
+    if (direction === 'LEFT') targetX -= 1;
+    if (direction === 'RIGHT') targetX += 1;
+
+    const nextTileIndex = map.tiles.findIndex((t: any) => t.x === targetX && t.y === targetY);
+
+    if (nextTileIndex !== -1) {
+      setCurrentTileIndexState(nextTileIndex);
+      markTileExplored(currentNodeId, nextTileIndex);
+      return true;
+    }
+    return false;
+  };
+
   const setPlayerHp = (hp: number) => {
     setPlayerHpState(hp);
   };
 
   const markTileDefeated = (mapId: string, tileIndex: number) => {
     setDefeatedTilesState((prev) => {
+      const current = prev[mapId] || [];
+      if (current.includes(tileIndex)) return prev;
+      return { ...prev, [mapId]: [...current, tileIndex] };
+    });
+  };
+
+  const markTileExplored = (mapId: string, tileIndex: number) => {
+    setExploredTilesState((prev) => {
       const current = prev[mapId] || [];
       if (current.includes(tileIndex)) return prev;
       return { ...prev, [mapId]: [...current, tileIndex] };
@@ -130,34 +170,8 @@ export function useMapEngine() {
     setCurrentNodeId(id);
     setPlayerHpState(100);
 
-    // Only reset non-boss defeated tiles (bosses stay dead permanently)
-    setDefeatedTilesState((prev) => {
-      const currentDefeated = prev[id] || [];
-      if (currentDefeated.length === 0) return prev;
-
-      // Find the map data to check which tiles are bosses
-      const map = (mapsData.maps as any[]).find((m: any) => m.id === id);
-      if (!map) {
-        // If we can't find the map, don't reset anything (safe fallback)
-        return prev;
-      }
-
-      // Keep only boss tile indices in the defeated list
-      const bossTileIndices = currentDefeated.filter((tileIdx: number) => {
-        const tile = map.tiles[tileIdx];
-        if (!tile) return false;
-
-        // Check if this tile's enemy is a boss
-        if (tile.type === 'boss') return true;
-        if (tile.enemyId) {
-          const enemy = (enemiesData.enemies as any[]).find((e: any) => e.id === tile.enemyId);
-          return enemy?.isBoss === true;
-        }
-        return false;
-      });
-
-      return { ...prev, [id]: bossTileIndices };
-    });
+    // FOR TESTING: Reset ALL defeated tiles (including bosses)
+    setDefeatedTilesState((prev) => ({ ...prev, [id]: [] }));
 
     return true;
   };
@@ -176,6 +190,7 @@ export function useMapEngine() {
     setCurrentTileIndexState(DEFAULT_STATE.currentTileIndex);
     setPlayerHpState(DEFAULT_STATE.playerHp);
     setDefeatedTilesState(DEFAULT_STATE.defeatedTiles);
+    setExploredTilesState(DEFAULT_STATE.exploredTiles);
     await AsyncStorage.removeItem(STORAGE_KEY);
   };
 
@@ -187,13 +202,16 @@ export function useMapEngine() {
     currentTileIndex,
     playerHp,
     defeatedTiles,
+    exploredTiles,
     isLoaded,
     setCurrentNodeId,
     setCurrentTileIndex: setCurrentTileIndexState,
     moveToNextTile,
     moveToPreviousTile,
+    moveInDirection,
     setPlayerHp,
     markTileDefeated,
+    markTileExplored,
     restAtBonfire,
     respawnAtBonfire,
     resetMapProgress,

@@ -144,9 +144,9 @@ export default function GameScreen() {
           <WalkingZone
             tiles={currentMap?.tiles || []}
             currentTileIndex={mapEngine.currentTileIndex}
-            moveToNextTile={mapEngine.moveToNextTile}
-            moveToPreviousTile={mapEngine.moveToPreviousTile}
+            moveInDirection={mapEngine.moveInDirection}
             defeatedTiles={mapEngine.defeatedTiles[mapEngine.currentNodeId] || []}
+            exploredTiles={mapEngine.exploredTiles[mapEngine.currentNodeId] || []}
             hp={mapEngine.playerHp}
             onEncounter={handleStartCombat}
             onRest={() => {
@@ -155,6 +155,7 @@ export default function GameScreen() {
             }}
             onMapComplete={handleMapComplete}
             onReturnToMap={handleReturnToMap}
+            mapId={mapEngine.currentNodeId}
             mapName={currentMap?.name || "UNKNOWN"}
           />
         )}
