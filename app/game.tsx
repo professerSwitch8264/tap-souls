@@ -207,7 +207,7 @@ export default function GameScreen() {
                       },
                     ]}
                   >
-                    {engine.bossName} - {engine.bossAction}
+                    {engine.bossName} {/* - {engine.bossAction} */}
                   </Text>
 
                   <View style={styles.barContainer}>
@@ -233,6 +233,8 @@ export default function GameScreen() {
                       />
                     </View>
 
+                    {/* Boss Cooldown Bar (White) - Commented out */}
+                    {/* 
                     <View style={[styles.barBG, { height: 4, marginTop: 4, backgroundColor: '#333' }]}>
                       <Animated.View
                         style={{
@@ -245,6 +247,7 @@ export default function GameScreen() {
                         }}
                       />
                     </View>
+                    */}
                   </View>
 
                   <View style={styles.feedbackContainer}>
