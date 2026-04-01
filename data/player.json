@@ -1,0 +1,26 @@
+{
+  "hp": 100,
+  "maxHp": 100,
+  "souls": 0,
+  "level": 1,
+  "stats": {
+    "vigor": 10,
+    "strength": 10,
+    "endurance": 10,
+    "basePoise": 50
+  },
+  "position": {
+    "nodeId": "firelink_shrine",
+    "tileIndex": 0
+  },
+  "inventory": {
+    "ownedWeapons": [
+      "broken_straight_sword"
+    ],
+    "equippedWeaponId": "broken_straight_sword"
+  },
+  "progress": {
+    "unlockedEnemies": ["lizard_soldier"],
+    "defeatedEnemies": []
+  }
+}

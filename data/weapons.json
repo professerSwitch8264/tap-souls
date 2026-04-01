@@ -1,0 +1,64 @@
+{
+  "weapons": [
+    {
+      "id": "broken_straight_sword",
+      "name": "BROKEN STRAIGHT SWORD",
+      "description": "A broken straight sword. Despite its poor condition, its light weight allows for extremely fast swings.",
+      "damage": 8,
+      "attackSpeed": 1.6,
+      "windUp": 50,
+      "active": 80,
+      "recovery": 100,
+      "poiseDamage": 10,
+      "hyperArmor": 1.0,
+      "critRate": 0.05,
+      "critMultiplier": 1.5,
+      "scaling": {
+        "strength": 0.3
+      },
+      "rarity": "common",
+      "icon": "gavel",
+      "lore": "An old, chipped blade discarded by some forgotten warrior. Its edge is dull, but desperation sharpens the will."
+    },
+    {
+      "id": "broadsword",
+      "name": "BROADSWORD",
+      "description": "A standard straight sword used widely by warriors. Well-balanced in both speed and striking power.",
+      "damage": 15,
+      "attackSpeed": 1.0,
+      "windUp": 80,
+      "active": 120,
+      "recovery": 150,
+      "poiseDamage": 25,
+      "hyperArmor": 1.5,
+      "critRate": 0.10,
+      "critMultiplier": 1.8,
+      "scaling": {
+        "strength": 0.6
+      },
+      "rarity": "uncommon",
+      "icon": "shield-alt",
+      "lore": "A reliable blade forged in Lothric. Many knights carried this sword to their graves — and beyond."
+    },
+    {
+      "id": "greatsword",
+      "name": "GREATSWORD",
+      "description": "An impossibly large sword requiring great strength. Its devastating power comes at the cost of slow, committed swings.",
+      "damage": 30,
+      "attackSpeed": 0.6,
+      "windUp": 300,
+      "active": 200,
+      "recovery": 250,
+      "poiseDamage": 60,
+      "hyperArmor": 4.0,
+      "critRate": 0.15,
+      "critMultiplier": 2.0,
+      "scaling": {
+        "strength": 1.0
+      },
+      "rarity": "rare",
+      "icon": "cross",
+      "lore": "A massive slab of iron that can barely be called a sword. Only those with inhuman strength dare wield it."
+    }
+  ]
+}

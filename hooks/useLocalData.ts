@@ -101,7 +101,7 @@ export function useEnemyData(initialEnemyId?: string) {
         if (found) {
           // แปลงเป็น EnemyData format (ให้ compatible กับ useGameEngine)
           const converted: EnemyData = {
-            id: 0, // ไม่จำเป็นต้องใช้ numeric id จาก Supabase แล้ว
+            id: found.id, 
             created_at: new Date().toISOString(),
             name: found.name,
             hp: found.hp,
@@ -109,6 +109,8 @@ export function useEnemyData(initialEnemyId?: string) {
             hit_gap: found.hit_gap,
             image_url: found.image_url,
             pattern: found.pattern,
+            isBoss: found.isBoss,
+            souls: found.souls
           };
           setData([converted]);
           console.log("📦 Enemy Data Loaded from JSON:", found.name);
@@ -118,8 +120,8 @@ export function useEnemyData(initialEnemyId?: string) {
         }
       } else {
         // ดึงทั้งหมด (fallback เป็นตัวแรก)
-        const converted: EnemyData[] = allEnemies.map((e, i) => ({
-          id: i,
+        const converted: EnemyData[] = allEnemies.map((e) => ({
+          id: e.id,
           created_at: new Date().toISOString(),
           name: e.name,
           hp: e.hp,
@@ -127,6 +129,8 @@ export function useEnemyData(initialEnemyId?: string) {
           hit_gap: e.hit_gap,
           image_url: e.image_url,
           pattern: e.pattern,
+          isBoss: e.isBoss,
+          souls: e.souls
         }));
         setData(converted);
         console.log("📦 All Enemies Loaded from JSON:", converted.length, "enemies");

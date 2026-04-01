@@ -27,7 +27,7 @@ const INITIAL_MAIL = [
 
 const DIFFICULTIES = ['EASY', 'NORMAL', 'HARD'] as const;
 
-export function ProfileButton({ hp = 100, containerStyle }: { hp?: number, containerStyle?: any }) {
+export function ProfileButton({ hp = 100, poise = 50, maxPoise = 50, containerStyle }: { hp?: number, poise?: number, maxPoise?: number, containerStyle?: any }) {
   const [modalVisible, setModalVisible] = useState(false);
   const [mailModalVisible, setMailModalVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
@@ -65,6 +65,12 @@ export function ProfileButton({ hp = 100, containerStyle }: { hp?: number, conta
               <View style={[styles.progressBarFill, { width: `${hp}%`, backgroundColor: '#ff5252' }]} />
             </View>
             <Text style={[styles.progressText, { color: '#ff5252' }]}>{hp}%</Text>
+          </View>
+          {/* Poise Bar */}
+          <View style={[styles.progressBarWrapper, { bottom: -2 }]}>
+            <View style={[styles.progressBarBg, { height: 2 }]}>
+              <View style={[styles.progressBarFill, { width: `${(poise / maxPoise) * 100}%`, backgroundColor: '#ffd740' }]} />
+            </View>
           </View>
         </View>
         <View style={[styles.avatarBox, { borderColor: selectedAvatar.color }]}>

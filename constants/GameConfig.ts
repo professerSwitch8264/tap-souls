@@ -1,3 +1,5 @@
+import { WeaponData } from '../hooks/usePlayerState';
+
 export const FRAME_WIDTH = 120;
 export const FRAME_HEIGHT = 120;
 
@@ -13,3 +15,23 @@ export const CONFIG = {
     hitGap: 500,
   },
 };
+
+/**
+ * Build an attack config from equipped weapon data.
+ * Falls back to CONFIG.PLAYER.ATTACK defaults when no weapon is provided.
+ */
+export function getWeaponAttackConfig(weapon?: WeaponData | null) {
+  if (!weapon) return CONFIG.PLAYER.ATTACK;
+
+  return {
+    windUp: weapon.windUp,
+    active: weapon.active,
+    recovery: weapon.recovery,
+    damage: weapon.damage,
+    critRate: weapon.critRate,
+    critMultiplier: weapon.critMultiplier,
+    attackSpeed: weapon.attackSpeed,
+    frames: CONFIG.PLAYER.ATTACK.frames,   // sprite frames stay the same
+    row: CONFIG.PLAYER.ATTACK.row,
+  };
+}

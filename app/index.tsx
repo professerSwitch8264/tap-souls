@@ -1,5 +1,4 @@
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { useRouter } from 'react-router-native';
 import { router } from 'expo-router';
 
 export default function MainMenu() {

@@ -14,67 +14,71 @@ import {
   Pressable,
 } from "react-native";
 import {
-  Directions,
-  Gesture,
-  GestureDetector,
   GestureHandlerRootView,
 } from "react-native-gesture-handler";
 
 import { FloatingDamage } from "../components/game/FloatingDamage";
-import { MapScreen } from "../components/game/MapScreen";
-import { WalkingZone } from "../components/game/WalkingZone";
+import { HubScreen } from "../components/game/HubScreen";
 import { ProfileButton } from "../components/ui/ProfileButton";
 import { FRAME_HEIGHT, FRAME_WIDTH } from "../constants/GameConfig";
 import { useGameEngine } from "../hooks/useGameEngine";
-import { useEnemyData, useMapData, getEnemyById } from "../hooks/useLocalData";
-import { useMapEngine } from "../hooks/useMapEngine";
+import { usePlayerState } from "../hooks/usePlayerState";
+import { useEnemyData } from "../hooks/useLocalData";
 
 import { ENEMY_IMAGES, HERO_IMAGES } from "../constants/ImageRegistry";
 
-// Screen types: MAP (world map), EXPLORING (walking in a map), COMBAT (fighting)
-type GameScreenType = "MAP" | "EXPLORING" | "COMBAT";
+// Screen types: HUB (main menu), COMBAT (fighting)
+type GameScreenType = "HUB" | "COMBAT";
 
 export default function GameScreen() {
   const router = useRouter();
-  const [screen, setScreen] = useState<GameScreenType>("MAP");
-  const [currentEnemyId, setCurrentEnemyId] = useState<string>("gundyr");
+  const [screen, setScreen] = useState<GameScreenType>("HUB");
+  const [currentEnemyId, setCurrentEnemyId] = useState<string>("lizard_soldier");
   const [pendingCombat, setPendingCombat] = useState(false);
 
   const {
     data: enemyData,
     loading: enemyLoading,
-    error: enemyError,
     setEnemyId,
   } = useEnemyData(currentEnemyId);
 
-  const mapEngine = useMapEngine();
-  const engine = useGameEngine(enemyData, enemyLoading, mapEngine.playerHp);
-  const { currentMap, loading: mapLoading } = useMapData(mapEngine.currentNodeId);
+  const playerState = usePlayerState();
+  const equippedWeapon = playerState.getEquippedWeapon() || null;
 
-  // When combat is won → go back to exploring (next tile)
+  const engine = useGameEngine(
+    enemyData, 
+    enemyLoading, 
+    playerState.hp, 
+    equippedWeapon, 
+    { ...playerState.stats, maxHp: playerState.maxHp }
+  );
+
+  // When combat is won → reward player and return to HUB
   useEffect(() => {
     if (engine.gameState === "WON") {
       const timer = setTimeout(() => {
-        mapEngine.markTileDefeated(mapEngine.currentNodeId, mapEngine.currentTileIndex);
-        mapEngine.setPlayerHp(engine.pHp);
+        playerState.markEnemyDefeated(currentEnemyId);
+        // Find the enemy in the list to get its soul reward
+        const souls = enemyData?.[0]?.souls || 50;
+        playerState.gainSouls(souls);
+        playerState.setPlayerHp(engine.pHp);
         engine.resetGame();
-        setScreen("EXPLORING");
+        setScreen("HUB");
       }, 2500);
       return () => clearTimeout(timer);
     }
-  }, [engine.gameState]);
+  }, [engine.gameState, currentEnemyId, enemyData]);
 
-  // Sync HP after damage or fight ends
+  // Sync HP after damage
   useEffect(() => {
-    if (engine.pHp !== mapEngine.playerHp) {
-      mapEngine.setPlayerHp(engine.pHp);
+    if (engine.pHp !== playerState.hp) {
+      playerState.setPlayerHp(engine.pHp);
     }
   }, [engine.pHp]);
 
-  // Watch for combat readiness: trigger encounter AFTER engine finishes re-initializing
+  // Watch for combat readiness
   useEffect(() => {
     if (pendingCombat && screen === "COMBAT") {
-      // Delay to ensure data loading + engine re-init effects have fully completed
       const timer = setTimeout(() => {
         engine.triggerEncounter();
         setPendingCombat(false);
@@ -83,43 +87,21 @@ export default function GameScreen() {
     }
   }, [pendingCombat, screen]);
 
-  // Handle Flee Success
+  // Handle Flee
   useEffect(() => {
     if (engine.fleeProgress >= 100) {
       engine.resetGame();
-      setScreen("MAP");
+      setScreen("HUB");
     }
   }, [engine.fleeProgress]);
 
-  // Handle entering combat from a tile
-  const handleStartCombat = (enemyId?: string) => {
-    if (enemyId) {
-      setCurrentEnemyId(enemyId);
-      setEnemyId(enemyId);
-    }
+  const handleStartCombat = (enemyId: string) => {
+    setCurrentEnemyId(enemyId);
+    setEnemyId(enemyId);
     setScreen("COMBAT");
-    setPendingCombat(true); // Don't call triggerEncounter directly, wait for data to be ready
+    setPendingCombat(true);
   };
 
-  // Handle map complete (walked past last tile)
-  const handleMapComplete = () => {
-    setScreen("MAP");
-  };
-
-  // Handle returning to map (from exploring)
-  const handleReturnToMap = () => {
-    setScreen("MAP");
-  };
-
-  // Handle selecting a node from the world map
-  const handleSelectNode = (node: any) => {
-    mapEngine.setCurrentNodeId(node.id);
-    mapEngine.setCurrentTileIndex(0);
-    engine.resetGame();
-    setScreen("EXPLORING");
-  };
-
-  // Actions (Now button-based)
   const handleAttack = () => engine.handleAction("ATTACK");
   const handleDodge = (direction: "LEFT" | "RIGHT") => engine.handleAction("DODGE", direction);
 
@@ -129,45 +111,20 @@ export default function GameScreen() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <View style={{ flex: 1, backgroundColor: "#000" }}>
 
-        {/* ===== WORLD MAP SCREEN ===== */}
-        {screen === "MAP" && (
-          <MapScreen
-            currentNodeId={mapEngine.currentNodeId}
-            unlockedNodes={mapEngine.unlockedNodes}
-            lastBonfireId={mapEngine.lastBonfireId}
-            onSelectNode={handleSelectNode}
-          />
-        )}
-
-        {/* ===== EXPLORING SCREEN (Walking through tiles) ===== */}
-        {screen === "EXPLORING" && (
-          <WalkingZone
-            tiles={currentMap?.tiles || []}
-            currentTileIndex={mapEngine.currentTileIndex}
-            moveInDirection={mapEngine.moveInDirection}
-            defeatedTiles={mapEngine.defeatedTiles[mapEngine.currentNodeId] || []}
-            exploredTiles={mapEngine.exploredTiles[mapEngine.currentNodeId] || []}
-            hp={mapEngine.playerHp}
-            onEncounter={handleStartCombat}
-            onRest={() => {
-              mapEngine.restAtBonfire(mapEngine.currentNodeId);
-              engine.healPlayer();
-            }}
-            onMapComplete={handleMapComplete}
-            onReturnToMap={handleReturnToMap}
-            mapId={mapEngine.currentNodeId}
-            mapName={currentMap?.name || "UNKNOWN"}
+        {/* ===== HUB SCREEN ===== */}
+        {screen === "HUB" && (
+          <HubScreen 
+            player={playerState}
+            onSelectEnemy={handleStartCombat}
           />
         )}
 
         {/* ===== COMBAT SCREEN ===== */}
         {screen === "COMBAT" && engine.gameState !== "LOADING" && (
           <View style={{ flex: 1 }}>
-            <View
-              style={[styles.container, { backgroundColor: bgInterpolation }]}
-            >
+            <View style={[styles.container, { backgroundColor: bgInterpolation }]}>
               <View style={styles.topHud}>
-                <ProfileButton hp={engine.pHp} />
+                <ProfileButton hp={engine.pHp} poise={engine.pPoise} maxPoise={50} />
               </View>
 
               <Animated.View
@@ -176,7 +133,6 @@ export default function GameScreen() {
                   { transform: [{ translateX: engine.shakeX }] },
                 ]}
               >
-                {/* Witch Time Overlay */}
                 <Animated.View
                   style={[
                     StyleSheet.absoluteFill,
@@ -189,25 +145,9 @@ export default function GameScreen() {
                   pointerEvents="none"
                 />
 
-                {/* Boss Section */}
                 <View style={[styles.bossBox, { marginTop: 20 }]}>
-                  <Text
-                    style={[
-                      styles.bossTitle,
-                      engine.isEnraged && {
-                        color: "#ff4444",
-                        ...Platform.select({
-                          web: { textShadow: "0px 0px 10px #f00" } as any,
-                          default: {
-                            textShadowColor: "#f00",
-                            textShadowOffset: { width: 0, height: 0 },
-                            textShadowRadius: 10,
-                          },
-                        }),
-                      },
-                    ]}
-                  >
-                    {engine.bossName} {/* - {engine.bossAction} */}
+                  <Text style={[styles.bossTitle, engine.isEnraged && { color: "#ff4444" }]}>
+                    {engine.bossName}
                   </Text>
 
                   <View style={styles.barContainer}>
@@ -226,39 +166,26 @@ export default function GameScreen() {
                       <View
                         style={[
                           styles.bossHP,
-                          {
-                            width: `${Math.min(100, Math.max(0, (engine.bHp / engine.bMaxHp) * 100))}%`,
-                          },
+                          { width: `${Math.min(100, Math.max(0, (engine.bHp / engine.bMaxHp) * 100))}%` },
                         ]}
                       />
                     </View>
 
-                    {/* Boss Cooldown Bar (White) - Commented out */}
-                    {/* 
-                    <View style={[styles.barBG, { height: 4, marginTop: 4, backgroundColor: '#333' }]}>
-                      <Animated.View
-                        style={{
-                          height: '100%',
-                          backgroundColor: 'white',
-                          width: engine.bCooldown.interpolate({
-                            inputRange: [0, 100],
-                            outputRange: ['0%', '100%']
-                          })
-                        }}
+                    <View style={[styles.barBG, { height: 4, marginTop: 4, backgroundColor: 'rgba(255,255,255,0.05)' }]}>
+                      <View
+                        style={[
+                          styles.bossPoise,
+                          { width: `${Math.min(100, Math.max(0, (engine.bPoise / engine.bMaxPoise) * 100))}%` },
+                        ]}
                       />
                     </View>
-                    */}
                   </View>
 
                   <View style={styles.feedbackContainer}>
                     {engine.feedbacks
                       .filter((f) => f.target === "BOSS")
                       .map((f) => (
-                        <FloatingDamage
-                          key={f.id}
-                          text={f.text}
-                          type={f.type}
-                        />
+                        <FloatingDamage key={f.id} text={f.text} type={f.type} />
                       ))}
                   </View>
 
@@ -282,26 +209,18 @@ export default function GameScreen() {
                             ? { uri: engine.currentBossImage }
                             : ENEMY_IMAGES["gundyr.png"]
                       }
-                      style={[
-                        styles.fullImg,
-                        engine.isEnraged && { tintColor: "#ffbbbb" },
-                      ]}
+                      style={[styles.fullImg, engine.isEnraged && { tintColor: "#ffbbbb" }]}
                       resizeMode="contain"
                     />
                   </Animated.View>
                 </View>
 
-                {/* Player Section */}
                 <View style={styles.playerContainer}>
                   <View style={styles.feedbackContainer}>
                     {engine.feedbacks
                       .filter((f) => f.target === "PLAYER")
                       .map((f) => (
-                        <FloatingDamage
-                          key={f.id}
-                          text={f.text}
-                          type={f.type}
-                        />
+                        <FloatingDamage key={f.id} text={f.text} type={f.type} />
                       ))}
                   </View>
 
@@ -330,27 +249,11 @@ export default function GameScreen() {
                 </View>
               </Animated.View>
 
-              {/* HUD Section */}
               <View style={styles.hud}>
                 {engine.combo > 1 && (
-                  <Text
-                    style={[
-                      styles.comboText,
-                      Platform.select({
-                        web: { textShadow: "0px 0px 5px #ffa000" } as any,
-                        default: {
-                          textShadowColor: "#ffa000",
-                          textShadowOffset: { width: 0, height: 0 },
-                          textShadowRadius: 5,
-                        },
-                      }),
-                    ]}
-                  >
-                    {engine.combo} HITS COMBO!
-                  </Text>
+                  <Text style={styles.comboText}>{engine.combo} HITS COMBO!</Text>
                 )}
 
-                {/* Flee Button - Bottom Left */}
                 {engine.fleeDifficulty > 0 && (
                   <View style={styles.fleeContainer}>
                     <Pressable
@@ -361,12 +264,7 @@ export default function GameScreen() {
                       onPressIn={() => engine.setIsFleeing(true)}
                       onPressOut={() => engine.setIsFleeing(false)}
                     >
-                      <View 
-                        style={[
-                          styles.fleeFill, 
-                          { height: `${engine.fleeProgress}%` }
-                        ]} 
-                      />
+                      <View style={[styles.fleeFill, { height: `${engine.fleeProgress}%` }]} />
                       <View style={styles.fleeContent}>
                         <FontAwesome5 name="running" size={24} color={engine.isFleeing ? "#ff9800" : "#eee"} />
                         <Text style={styles.fleeText}>
@@ -377,43 +275,30 @@ export default function GameScreen() {
                   </View>
                 )}
 
-                {/* COMBAT ACTIONS - Bottom Right */}
                 <View style={styles.actionContainer}>
-                  {/* Dodge (Left Only) */}
                   <TouchableOpacity 
                     style={[styles.smallBtn, engine.isLocked && styles.btnDisabled]} 
-                    activeOpacity={0.7}
                     onPress={() => handleDodge("LEFT")}
                     disabled={engine.isLocked}
                   >
                     <FontAwesome5 name="undo-alt" size={24} color="white" />
-                    <Text style={{ fontSize: 10, color: 'white', fontWeight: 'bold', marginTop: 4 }}>DODGE</Text>
                   </TouchableOpacity>
 
-                  {/* Attack Button */}
                   <TouchableOpacity 
                     style={[styles.mainBtn, engine.isLocked && styles.btnDisabled]} 
-                    activeOpacity={0.7}
                     onPress={handleAttack}
                     disabled={engine.isLocked}
                   >
-                    <View style={styles.attackInner}>
-                      <FontAwesome5 name="hand-rock" size={48} color="white" />
-                    </View>
+                    <FontAwesome5 name="hand-rock" size={48} color="white" />
                   </TouchableOpacity>
                 </View>
               </View>
 
-              {/* Screen Flash Overlay */}
               <Animated.View
-                style={[
-                  StyleSheet.absoluteFill,
-                  { backgroundColor: "white", opacity: engine.flashOp },
-                ]}
+                style={[StyleSheet.absoluteFill, { backgroundColor: "white", opacity: engine.flashOp }]}
                 pointerEvents="none"
               />
 
-              {/* Countdown Overlay */}
               {engine.gameState === "COUNTDOWN" && (
                 <View style={styles.countdownOverlay}>
                   <Text style={styles.countdownText}>
@@ -425,7 +310,6 @@ export default function GameScreen() {
           </View>
         )}
 
-        {/* LOADING SCREEN OVERLAY */}
         {screen === "COMBAT" && engine.gameState === "LOADING" && (
           <View style={styles.loadingScreen}>
             <ActivityIndicator size="large" color="#ff4444" />
@@ -434,37 +318,18 @@ export default function GameScreen() {
         )}
       </View>
 
-      {/* YOU DIED Modal */}
-      <Modal
-        visible={engine.gameState === "LOST"}
-        transparent
-        animationType="fade"
-      >
+      <Modal visible={engine.gameState === "LOST"} transparent animationType="fade">
         <View style={styles.modal}>
-          <Text
-            style={[
-              styles.modalText,
-              Platform.select({
-                web: { textShadow: "0px 0px 10px #f00" } as any,
-                default: {
-                  textShadowColor: "#f00",
-                  textShadowOffset: { width: 0, height: 0 },
-                  textShadowRadius: 10,
-                },
-              }),
-            ]}
-          >
-            YOU DIED
-          </Text>
+          <Text style={styles.modalText}>YOU DIED</Text>
           <TouchableOpacity
             style={styles.retryBtn}
             onPress={() => {
               engine.resetGame();
-              mapEngine.respawnAtBonfire();
-              setScreen("EXPLORING");
+              playerState.restAtBonfire();
+              setScreen("HUB");
             }}
           >
-            <Text style={styles.retryText}>RESPAWN AT BONFIRE</Text>
+            <Text style={styles.retryText}>REST AT HUB</Text>
           </TouchableOpacity>
         </View>
       </Modal>
@@ -492,15 +357,6 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     overflow: "hidden",
     position: "relative",
-  },
-  barBGHud: {
-    height: 16,
-    backgroundColor: "#222",
-    borderRadius: 2,
-    overflow: "hidden",
-    position: "relative",
-    borderWidth: 1,
-    borderColor: "#555",
   },
   fleeContainer: {
     position: 'absolute',
@@ -531,9 +387,7 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: 'rgba(255,152,0,0.4)',
   },
-  fleeContent: {
-    alignItems: 'center',
-  },
+  fleeContent: { alignItems: 'center' },
   fleeText: {
     color: '#eee',
     fontSize: 10,
@@ -557,17 +411,10 @@ const styles = StyleSheet.create({
     borderColor: '#ff4444',
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 10,
     shadowColor: '#f00',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
     shadowRadius: 10,
-  },
-  attackInner: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   smallBtn: {
     width: 80,
@@ -590,6 +437,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#ffca28",
   },
   bossHP: { height: "100%", backgroundColor: "#e53935", position: "absolute" },
+  bossPoise: { height: "100%", backgroundColor: "#ffd740", position: "absolute" },
   bossBody: { width: 300, height: 300 },
   fullImg: { width: "100%", height: "100%" },
   playerContainer: {
@@ -613,8 +461,6 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     zIndex: 50,
   },
-  statRow: { flexDirection: "row", alignItems: "center" },
-  label: { color: "white", fontSize: 14, width: 35, fontWeight: "bold" },
   comboText: {
     color: "#ffea00",
     fontSize: 18,
@@ -662,13 +508,5 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 120,
     fontWeight: "bold",
-    ...Platform.select({
-      web: { textShadow: "0px 0px 20px #ff4444" } as any,
-      default: {
-        textShadowColor: "#ff4444",
-        textShadowOffset: { width: 0, height: 0 },
-        textShadowRadius: 20,
-      },
-    }),
   },
 });

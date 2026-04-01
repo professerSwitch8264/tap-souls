@@ -1,7 +1,8 @@
 import * as Haptics from "expo-haptics";
 import { useEffect, useRef, useState } from "react";
 import { Animated } from "react-native";
-import { CONFIG } from "../constants/GameConfig";
+import { CONFIG, getWeaponAttackConfig } from "../constants/GameConfig";
+import { WeaponData } from "./usePlayerState";
 
 import { BossPattern, EnemyData } from "./useSupabaseData";
 
@@ -19,13 +20,17 @@ const DEFAULT_BOSS_PATTERNS: BossPattern[] = [
   }
 ];
 
-export function useGameEngine(initialEnemyData?: EnemyData[] | null, isDataLoading?: boolean, initialPlayerHp: number = 100) {
-  const player = useRef({ status: "IDLE", hp: initialPlayerHp, isInvincible: false });
-  const boss = useRef({ status: "IDLE", hp: CONFIG.BOSS.maxHp, damage: CONFIG.BOSS.damage, hitGap: CONFIG.BOSS.hitGap, isStunned: false });
+export function useGameEngine(initialEnemyData?: EnemyData[] | null, isDataLoading?: boolean, initialPlayerHp: number = 100, equippedWeapon?: WeaponData | null, playerStats?: any) {
+  const maxPoise = (playerStats?.basePoise || 50) + (playerStats?.endurance || 0);
+  const player = useRef({ status: "IDLE", hp: initialPlayerHp, isInvincible: false, poise: maxPoise, maxPoise: maxPoise });
+  const boss = useRef({ status: "IDLE", hp: CONFIG.BOSS.maxHp, damage: CONFIG.BOSS.damage, hitGap: CONFIG.BOSS.hitGap, isStunned: false, isHyperArmorActive: false, poise: 100, maxPoise: 100 });
 
   const [pHp, setPHp] = useState(initialPlayerHp);
   const [bHp, setBHp] = useState(CONFIG.BOSS.maxHp);
   const [bMaxHp, setBMaxHp] = useState(CONFIG.BOSS.maxHp);
+  const [pPoise, setPPoise] = useState(50);
+  const [bPoise, setBPoise] = useState(100);
+  const [bMaxPoise, setBMaxPoise] = useState(100);
   const [bossName, setBossName] = useState("GUNDYR");
   const [gameState, setGameState] = useState<"LOADING" | "EXPLORING" | "COUNTDOWN" | "PLAYING" | "WON" | "LOST">("LOADING");
   const [countdown, setCountdown] = useState(0);
@@ -58,6 +63,10 @@ export function useGameEngine(initialEnemyData?: EnemyData[] | null, isDataLoadi
       player.current.hp = initialPlayerHp;
       setPHp(initialPlayerHp);
       pCatchUp.setValue(initialPlayerHp);
+      
+      // Reset Poise
+      player.current.poise = player.current.maxPoise;
+      setPPoise(player.current.maxPoise);
     }
   }, [initialPlayerHp]);
   const bCatchUp = useRef(new Animated.Value(100)).current;
@@ -104,8 +113,13 @@ export function useGameEngine(initialEnemyData?: EnemyData[] | null, isDataLoadi
       boss.current.hp = startingHp;
       boss.current.damage = enemy.damage || CONFIG.BOSS.damage;
       boss.current.hitGap = enemy.hit_gap || CONFIG.BOSS.hitGap;
+      const startingPoise = (enemy as any).poise || 100;
+      boss.current.poise = startingPoise;
+      boss.current.maxPoise = startingPoise;
       setBHp(startingHp);
       setBMaxHp(startingHp);
+      setBPoise(startingPoise);
+      setBMaxPoise(startingPoise);
       setBossName(enemy.name || "UNKNOWN BOSS");
 
       if (enemy.image_url) {
@@ -154,6 +168,26 @@ export function useGameEngine(initialEnemyData?: EnemyData[] | null, isDataLoadi
     }
     return () => clearTimeout(timer);
   }, [gameState, countdown]);
+
+  // Poise Recovery loop
+  useEffect(() => {
+    let interval: any;
+    if (gameState === "PLAYING") {
+      interval = setInterval(() => {
+        // Player Poise Recovery
+        if (player.current.poise < player.current.maxPoise && player.current.status !== "BUSY") {
+          player.current.poise = Math.min(player.current.maxPoise, player.current.poise + 2);
+          setPPoise(player.current.poise);
+        }
+        // Boss Poise Recovery
+        if (boss.current.poise < boss.current.maxPoise && !boss.current.isStunned) {
+          boss.current.poise = Math.min(boss.current.maxPoise, boss.current.poise + 3);
+          setBPoise(boss.current.poise);
+        }
+      }, 500); 
+    }
+    return () => clearInterval(interval);
+  }, [gameState]);
 
   // Flee progress logic
   useEffect(() => {
@@ -258,12 +292,17 @@ export function useGameEngine(initialEnemyData?: EnemyData[] | null, isDataLoadi
 
       if (boss.current.isStunned) break;
 
+      // BOSS HYPER ARMOR ON: Swing started!
+      boss.current.isHyperArmorActive = true;
+
       animateImageArray(activeImgs, isEnraged ? 80 : 120);
 
       Animated.sequence([
         Animated.timing(bY, { toValue: dropDist, duration: isEnraged ? 80 : 120, useNativeDriver: true }),
         Animated.timing(bY, { toValue: 0, duration: 450, useNativeDriver: true }),
-      ]).start();
+      ]).start(() => {
+        boss.current.isHyperArmorActive = false;
+      });
 
       setTimeout(() => {
         if (gameState === "PLAYING" && !boss.current.isStunned) {
@@ -275,14 +314,32 @@ export function useGameEngine(initialEnemyData?: EnemyData[] | null, isDataLoadi
           }
 
           if (!player.current.isInvincible) {
+            // Apply Damage
             player.current.hp -= boss.current.damage + (isEnraged ? 10 : 0);
             setPHp(Math.max(0, player.current.hp));
             showFeedback(`-${boss.current.damage + (isEnraged ? 10 : 0)}`, "DAMAGE", "PLAYER");
+            
+            // Apply Poise Damage
+            let poiseDmg = heavy ? 40 : 20;
+            // Hyper Armor check
+            if (player.current.status === "ATTACK") {
+              const weaponArmor = (equippedWeapon as any)?.hyperArmor || 1.0;
+              poiseDmg = Math.floor(poiseDmg / weaponArmor);
+              showFeedback("TRADED!", "PARRY", "PLAYER");
+            }
+            
+            player.current.poise -= poiseDmg;
+            setPPoise(Math.max(0, player.current.poise));
+
             triggerShake(10);
             triggerFlash(200);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
             setCombo(0);
             setFleeProgress(0); // Reset flee progress on hit!
+
+            if (player.current.poise <= 0) {
+              triggerPlayerStagger();
+            }
 
             if (player.current.hp <= 0) {
               setGameState("LOST");
@@ -333,8 +390,13 @@ export function useGameEngine(initialEnemyData?: EnemyData[] | null, isDataLoadi
   const activateWitchTime = () => {
     if (boss.current.isStunned) return;
     boss.current.isStunned = true;
-    setBossAction("STUNNED!");
+    boss.current.isHyperArmorActive = false; // Breaking stagger removes hyper armor
+    setBossAction("STAGGERED!");
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Rigid);
+
+    // CANCEL ALL BOSS ANIMATIONS IMMEDIATELY
+    bY.stopAnimation();
+    setCurrentBossImage(baseBossImage);
 
     Animated.timing(slowMoOverlay, { toValue: 1, duration: 200, useNativeDriver: true }).start();
 
@@ -345,8 +407,37 @@ export function useGameEngine(initialEnemyData?: EnemyData[] | null, isDataLoadi
     setTimeout(() => {
       boss.current.isStunned = false;
       boss.current.status = "IDLE";
+      boss.current.poise = boss.current.maxPoise; // RESET POISE AFTER STUN
+      setBPoise(boss.current.maxPoise);
       setBossAction("RECOVERING...");
     }, 2500);
+  };
+
+  const triggerPlayerStagger = () => {
+    if (player.current.status === "BUSY" || player.current.status === "STAGGERED") return;
+    showFeedback("STAGGERED!", "LOST", "PLAYER");
+    player.current.status = "BUSY";
+    setIsLocked(true);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    triggerShake(20);
+    
+    // CANCEL PLAYER ANIMATIONS IMMEDIATELY
+    pY.stopAnimation();
+    pX.stopAnimation();
+    pY.setValue(0);
+    pX.setValue(0);
+    
+    // Stagger animation/lock
+    setFrameY(5);
+    setFrameX(7); 
+    
+    setTimeout(() => {
+      player.current.status = "IDLE";
+      player.current.poise = player.current.maxPoise;
+      setPPoise(player.current.maxPoise);
+      setIsLocked(false);
+      setFrameY(0);
+    }, 1200);
   };
 
   const animateSprite = async (row: number, frames: number[], duration: number) => {
@@ -359,7 +450,8 @@ export function useGameEngine(initialEnemyData?: EnemyData[] | null, isDataLoadi
   };
 
   const handleAction = async (type: "ATTACK" | "DODGE", direction?: "LEFT" | "RIGHT") => {
-    const c = type === "ATTACK" ? CONFIG.PLAYER.ATTACK : CONFIG.PLAYER.DODGE;
+    const weaponConfig = type === "ATTACK" ? getWeaponAttackConfig(equippedWeapon) : CONFIG.PLAYER.DODGE;
+    const c = { ...weaponConfig };
     if (isLocked || gameState !== "PLAYING") return;
 
     setIsLocked(true);
@@ -382,13 +474,44 @@ export function useGameEngine(initialEnemyData?: EnemyData[] | null, isDataLoadi
         useNativeDriver: true,
       }).start(() => {
         if (type === "ATTACK") {
-          const dmg = CONFIG.PLAYER.ATTACK.damage + (combo * 2);
+          // Use weapon damage + combo bonus, with crit chance
+          // Use weapon damage + combo bonus, with crit chance + STR scaling
+          const strScaling = (playerStats?.strength || 10) / 10;
+          const baseDmg = ((weaponConfig as any).damage || CONFIG.PLAYER.ATTACK.damage) * strScaling;
+          const critRate = (weaponConfig as any).critRate || 0;
+          const critMult = (weaponConfig as any).critMultiplier || 1.5;
+          const isCrit = Math.random() < critRate;
+          const rawDmg = Math.floor(baseDmg + (combo * 2));
+          const dmg = isCrit ? Math.floor(rawDmg * critMult) : rawDmg;
+
           boss.current.hp -= dmg;
           setBHp(Math.max(0, boss.current.hp));
-          setCombo(c => c + 1);
+          
+          // Apply Poise Damage to Boss (Unless HYPER ARMOR is active)
+          const wPoiseDmg = (equippedWeapon as any)?.poiseDamage || 10;
+          
+          if (!boss.current.isHyperArmorActive) {
+            boss.current.poise -= wPoiseDmg;
+            setBPoise(Math.max(0, boss.current.poise));
+            
+            if (boss.current.poise <= 0) {
+              showFeedback("STAGGERED!", "PERFECT", "BOSS");
+              activateWitchTime();
+            }
+          } else {
+            showFeedback("HYPER ARMOR!", "PARRY", "BOSS");
+          }
+          
+          setCombo(prev => prev + 1);
 
-          showFeedback(`-${dmg}`, "DAMAGE", "BOSS");
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          if (isCrit) {
+            showFeedback(`-${dmg} CRIT!`, "PERFECT", "BOSS");
+            triggerShake(8);
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+          } else {
+            showFeedback(`-${dmg}`, "DAMAGE", "BOSS");
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }
 
           if (combo > 2) {
             triggerShake(5);
@@ -428,11 +551,28 @@ export function useGameEngine(initialEnemyData?: EnemyData[] | null, isDataLoadi
     const baseDamage = (initialEnemyData && initialEnemyData.length > 0 && initialEnemyData[0].damage) ? initialEnemyData[0].damage : CONFIG.BOSS.damage;
     const baseHitGap = (initialEnemyData && initialEnemyData.length > 0 && initialEnemyData[0].hit_gap) ? initialEnemyData[0].hit_gap : CONFIG.BOSS.hitGap;
 
-    player.current = { status: "IDLE", hp: pHp, isInvincible: false };
-    boss.current = { status: "IDLE", hp: startingHp, damage: baseDamage, hitGap: baseHitGap, isStunned: false };
-    // setPHp(pHp); // pHp stays the same
+    player.current = { 
+      ...player.current, 
+      status: "IDLE", 
+      hp: pHp, 
+      isInvincible: false, 
+      poise: player.current.maxPoise 
+    };
+    boss.current = { 
+      ...boss.current, 
+      status: "IDLE", 
+      hp: startingHp, 
+      damage: baseDamage, 
+      hitGap: baseHitGap, 
+      isStunned: false, 
+      poise: boss.current.maxPoise 
+    };
+
     setBHp(startingHp);
     setBMaxHp(startingHp);
+    setBPoise(boss.current.maxPoise);
+    setBMaxPoise(boss.current.maxPoise);
+    setPPoise(player.current.maxPoise);
     setFeedbacks([]);
     setGameState("EXPLORING");
     setCountdown(0);
@@ -452,10 +592,11 @@ export function useGameEngine(initialEnemyData?: EnemyData[] | null, isDataLoadi
   };
 
   const healPlayer = () => {
-    player.current.hp = 100;
-    setPHp(100);
-    pCatchUp.setValue(100);
-    showFeedback("+100 HP", "SUCCESS", "PLAYER");
+    const maxHp = playerStats?.maxHp || 100;
+    player.current.hp = maxHp;
+    setPHp(maxHp);
+    pCatchUp.setValue(maxHp);
+    showFeedback(`+${maxHp} HP`, "SUCCESS", "PLAYER");
   };
 
   const triggerEncounter = () => {
@@ -464,7 +605,9 @@ export function useGameEngine(initialEnemyData?: EnemyData[] | null, isDataLoadi
   };
 
   return {
-    pHp, setPHp, bHp, setBHp, bMaxHp, gameState, setGameState, isLocked, bossAction, bossName, isEnraged, combo, feedbacks,
+    pHp, setPHp, bHp, setBHp, bMaxHp,
+    pPoise, setPPoise, bPoise, setBPoise, bMaxPoise,
+    gameState, setGameState, isLocked, bossAction, bossName, isEnraged, combo, feedbacks,
     pY, pX, bY, shakeX, flashOp, slowMoOverlay, pCatchUp, bCatchUp, bCooldown, bossOpacity, bossScale, frameX, frameY, currentBossImage,
     countdown, resetGame, handleAction, healPlayer, triggerEncounter,
     fleeProgress, isFleeing, setIsFleeing, fleeDifficulty
