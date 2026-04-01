@@ -1,5 +1,31 @@
 import { useState, useEffect } from "react";
-import { BossPattern, EnemyData } from "./useSupabaseData";
+// ===== Core Combat Types =====
+export interface BossPattern {
+  name: string;
+  hits: number;
+  weight: number;
+  windUp: number;
+  cooldown: number;
+  dropDist: number;
+  heavy: boolean;
+  windUpImgs?: string[];
+  activeImgs?: string[];
+}
+
+export interface EnemyData {
+  id: string;
+  created_at?: string;
+  name: string;
+  hp: number;
+  damage: number;
+  hit_gap: number;
+  image_url: string | null;
+  pattern: BossPattern[];
+  isBoss?: boolean;
+  souls?: number;
+  poise?: number;
+  flee_difficulty?: number;
+}
 
 // Import JSON data
 import mapsData from "../data/maps.json";

@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import { FontAwesome5 } from "@expo/vector-icons";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -15,6 +15,9 @@ import {
 } from "react-native";
 import {
   GestureHandlerRootView,
+  Gesture,
+  GestureDetector,
+  Directions,
 } from "react-native-gesture-handler";
 
 import { FloatingDamage } from "../components/game/FloatingDamage";
@@ -105,6 +108,31 @@ export default function GameScreen() {
   const handleAttack = () => engine.handleAction("ATTACK");
   const handleDodge = (direction: "LEFT" | "RIGHT") => engine.handleAction("DODGE", direction);
 
+  // Gesture Handlers
+  const tapGesture = Gesture.Tap()
+    .onEnd(() => {
+      if (engine.gameState !== "PLAYING" || engine.isLocked) return;
+      handleAttack();
+    })
+    .runOnJS(true);
+
+  const swipeLeft = Gesture.Fling()
+    .direction(Directions.LEFT)
+    .onEnd(() => {
+      handleDodge("LEFT");
+    })
+    .runOnJS(true);
+
+  const swipeRight = Gesture.Fling()
+    .direction(Directions.RIGHT)
+    .onEnd(() => {
+      handleDodge("RIGHT");
+    })
+    .runOnJS(true);
+
+  // Combine gestures
+  const composedGesture = Gesture.Exclusive(swipeLeft, swipeRight, tapGesture);
+
   const bgInterpolation = engine.isEnraged ? "#2a0000" : "#000000";
 
   return (
@@ -121,142 +149,201 @@ export default function GameScreen() {
 
         {/* ===== COMBAT SCREEN ===== */}
         {screen === "COMBAT" && engine.gameState !== "LOADING" && (
-          <View style={{ flex: 1 }}>
-            <View style={[styles.container, { backgroundColor: bgInterpolation }]}>
-              <View style={styles.topHud}>
-                <ProfileButton hp={engine.pHp} poise={engine.pPoise} maxPoise={50} />
-              </View>
+          <View style={styles.container}>
 
+            {/* Cinematic Boss HUD (Top Center) */}
+            <View style={styles.bossHUD}>
+              <Text style={styles.bossTitle}>{engine.bossName.toUpperCase()}</Text>
+              <View style={styles.bossBarContainer}>
+                {/* Boss HP Bar */}
+                <View style={styles.bossHPBarBg}>
+                  <Animated.View
+                    style={[
+                      styles.bossCatchUp,
+                      {
+                        width: engine.bCatchUp.interpolate({
+                          inputRange: [0, 100],
+                          outputRange: ["0%", "100%"],
+                        }),
+                      },
+                    ]}
+                  />
+                  <View
+                    style={[
+                      styles.bossHPBarFill,
+                      { width: `${Math.min(100, Math.max(0, (engine.bHp / engine.bMaxHp) * 100))}%` },
+                    ]}
+                  />
+                </View>
+
+                {/* Boss Poise Bar */}
+                <View style={styles.bossPoiseBarBg}>
+                  <View
+                    style={[
+                      styles.bossPoiseBarFill,
+                      { width: `${Math.min(100, Math.max(0, (engine.bPoise / engine.bMaxPoise) * 100))}%` },
+                    ]}
+                  />
+                </View>
+
+                {/* Boss Status Row */}
+                <View style={[styles.statusRow, { justifyContent: 'center' }]}>
+                  {engine.bBleed > 0 && (
+                    <View style={styles.statusIcon}>
+                      <FontAwesome5 name="tint" size={8} color="#ff1100" />
+                      <View style={[styles.statusMiniBar, { width: (engine.bBleed / 250) * 40, backgroundColor: '#ff1100' }]} />
+                    </View>
+                  )}
+                  {engine.bPoison > 0 && (
+                    <View style={styles.statusIcon}>
+                      <FontAwesome5 name="skull" size={8} color="#a64dff" />
+                      <View style={[styles.statusMiniBar, { width: (engine.bPoison / 250) * 40, backgroundColor: '#a64dff' }]} />
+                    </View>
+                  )}
+                </View>
+              </View>
+            </View>
+
+            <GestureDetector gesture={composedGesture}>
               <Animated.View
                 style={[
                   styles.battleZone,
                   { transform: [{ translateX: engine.shakeX }] },
                 ]}
               >
+              {/* Witch Time / SlowMo Overlay */}
+              <Animated.View
+                style={[
+                  StyleSheet.absoluteFill,
+                  {
+                    backgroundColor: "rgba(50,150,255,0.1)",
+                    opacity: engine.slowMoOverlay,
+                    zIndex: 0,
+                  },
+                ]}
+                pointerEvents="none"
+              />
+
+              {/* Boss Sprite Section */}
+              <View style={styles.bossSpriteContainer}>
+                <View style={styles.feedbackContainer}>
+                  {engine.feedbacks
+                    .filter((f) => f.target === "BOSS")
+                    .map((f) => (
+                      <FloatingDamage key={f.id} text={f.text} type={f.type} />
+                    ))}
+                </View>
+
                 <Animated.View
                   style={[
-                    StyleSheet.absoluteFill,
-                    {
-                      backgroundColor: "rgba(50,150,255,0.15)",
-                      opacity: engine.slowMoOverlay,
-                      zIndex: 0,
+                    styles.bossBody,
+                    { 
+                      transform: [
+                        { translateY: engine.bY },
+                        { scale: engine.bossScale }
+                      ],
+                      opacity: engine.bossOpacity
                     },
                   ]}
-                  pointerEvents="none"
-                />
+                >
+                  <Image
+                    source={
+                      engine.currentBossImage && ENEMY_IMAGES[engine.currentBossImage]
+                        ? ENEMY_IMAGES[engine.currentBossImage]
+                        : engine.currentBossImage
+                          ? { uri: engine.currentBossImage }
+                          : ENEMY_IMAGES["gundyr.png"]
+                    }
+                    style={[styles.fullImg, engine.isEnraged && { tintColor: "#ffbbbb" }]}
+                    resizeMode="contain"
+                  />
+                </Animated.View>
+              </View>
 
-                <View style={[styles.bossBox, { marginTop: 20 }]}>
-                  <Text style={[styles.bossTitle, engine.isEnraged && { color: "#ff4444" }]}>
-                    {engine.bossName}
-                  </Text>
-
-                  <View style={styles.barContainer}>
-                    <View style={styles.barBG}>
-                      <Animated.View
-                        style={[
-                          styles.catchUpBar,
-                          {
-                            width: engine.bCatchUp.interpolate({
-                              inputRange: [0, 100],
-                              outputRange: ["0%", "100%"],
-                            }),
-                          },
-                        ]}
-                      />
-                      <View
-                        style={[
-                          styles.bossHP,
-                          { width: `${Math.min(100, Math.max(0, (engine.bHp / engine.bMaxHp) * 100))}%` },
-                        ]}
-                      />
-                    </View>
-
-                    <View style={[styles.barBG, { height: 4, marginTop: 4, backgroundColor: 'rgba(255,255,255,0.05)' }]}>
-                      <View
-                        style={[
-                          styles.bossPoise,
-                          { width: `${Math.min(100, Math.max(0, (engine.bPoise / engine.bMaxPoise) * 100))}%` },
-                        ]}
-                      />
-                    </View>
-                  </View>
-
-                  <View style={styles.feedbackContainer}>
-                    {engine.feedbacks
-                      .filter((f) => f.target === "BOSS")
-                      .map((f) => (
-                        <FloatingDamage key={f.id} text={f.text} type={f.type} />
-                      ))}
-                  </View>
-
-                  <Animated.View
-                    style={[
-                      styles.bossBody,
-                      { 
-                        transform: [
-                          { translateY: engine.bY },
-                          { scale: engine.bossScale }
-                        ],
-                        opacity: engine.bossOpacity
-                      },
-                    ]}
-                  >
-                    <Image
-                      source={
-                        engine.currentBossImage && ENEMY_IMAGES[engine.currentBossImage]
-                          ? ENEMY_IMAGES[engine.currentBossImage]
-                          : engine.currentBossImage
-                            ? { uri: engine.currentBossImage }
-                            : ENEMY_IMAGES["gundyr.png"]
-                      }
-                      style={[styles.fullImg, engine.isEnraged && { tintColor: "#ffbbbb" }]}
-                      resizeMode="contain"
-                    />
-                  </Animated.View>
+              {/* Player Sprite Section */}
+              <View style={styles.playerContainer}>
+                <View style={styles.feedbackContainer}>
+                  {engine.feedbacks
+                    .filter((f) => f.target === "PLAYER")
+                    .map((f) => (
+                      <FloatingDamage key={f.id} text={f.text} type={f.type} />
+                    ))}
                 </View>
 
-                <View style={styles.playerContainer}>
-                  <View style={styles.feedbackContainer}>
-                    {engine.feedbacks
-                      .filter((f) => f.target === "PLAYER")
-                      .map((f) => (
-                        <FloatingDamage key={f.id} text={f.text} type={f.type} />
-                      ))}
-                  </View>
-
-                  <Animated.View
+                <Animated.View
+                  style={[
+                    styles.spriteWindow,
+                    {
+                      transform: [
+                        { translateY: engine.pY },
+                        { translateX: engine.pX },
+                        { scale: engine.pScale },
+                      ],
+                    },
+                  ]}
+                >
+                  <Image
+                    source={HERO_IMAGES.ashenOne}
                     style={[
-                      styles.spriteWindow,
+                      styles.spritesheet,
                       {
-                        transform: [
-                          { translateY: engine.pY },
-                          { translateX: engine.pX },
-                        ],
+                        left: -engine.frameX * FRAME_WIDTH,
+                        top: -engine.frameY * (719 / 6),
                       },
                     ]}
-                  >
-                    <Image
-                      source={HERO_IMAGES.ashenOne}
-                      style={[
-                        styles.spritesheet,
-                        {
-                          left: -engine.frameX * FRAME_WIDTH,
-                          top: -engine.frameY * (719 / 6),
-                        },
-                      ]}
-                    />
-                  </Animated.View>
+                  />
+                </Animated.View>
+              </View>
+            </Animated.View>
+          </GestureDetector>
+
+            {/* Combo Counter Overlay */}
+            {engine.combo > 1 && (
+              <Text style={styles.comboText}>{engine.combo} HITS</Text>
+            )}
+
+            {/* Ergonomic Bottom HUD */}
+            <View style={styles.bottomHUD}>
+              {/* Player Mini Stats */}
+              <View style={styles.statsHUD}>
+                <View style={styles.statBarWrapper}>
+                   <View style={[styles.healthFill, { width: `${(engine.pHp / playerState.maxHp) * 100}%` }]} />
                 </View>
-              </Animated.View>
-
-              <View style={styles.hud}>
-                {engine.combo > 1 && (
-                  <Text style={styles.comboText}>{engine.combo} HITS COMBO!</Text>
+                <View style={styles.statBarWrapper}>
+                   <View style={[styles.staminaFill, { width: `${(engine.pStamina / 120) * 100}%` }]} />
+                </View>
+                {engine.tension > 0 && (
+                   <View style={[styles.statBarWrapper, { height: 2 }]}>
+                      <View style={[styles.tensionFill, { width: `${engine.tension}%` }]} />
+                   </View>
                 )}
+              </View>
 
+              {/* Action Buttons Grid */}
+              <View style={[styles.actionGrid, { justifyContent: 'space-around' }]}>
+                {/* Utility: Heal */}
+                <TouchableOpacity 
+                  style={[styles.subActionBtn, engine.estus <= 0 && styles.disabledBtn]} 
+                  onPress={() => engine.handleAction("HEAL")}
+                  disabled={engine.isLocked || engine.estus <= 0}
+                >
+                  <FontAwesome5 name="flask" size={16} color="#4caf50" />
+                  <Text style={{ color: '#4caf50', fontSize: 8, fontWeight: 'bold' }}>{engine.estus}</Text>
+                </TouchableOpacity>
+
+                {/* Fire Button (Skill/Weapon Art) - High Damage & Poise Damage */}
+                <TouchableOpacity 
+                  style={[styles.subActionBtn, { borderColor: '#ff9800' }, engine.tension < 100 && styles.disabledBtn]} 
+                  onPress={() => engine.handleAction("SKILL")}
+                  disabled={engine.isLocked || engine.tension < 100}
+                >
+                  <FontAwesome5 name="fire-alt" size={18} color="#ff9800" />
+                  {engine.tension < 100 && <Text style={{ color: '#ff9800', fontSize: 7, fontWeight: 'bold' }}>{engine.tension}%</Text>}
+                </TouchableOpacity>
+
+                {/* Flee */}
                 {engine.fleeDifficulty > 0 && (
-                  <View style={styles.fleeContainer}>
-                    <Pressable
+                   <Pressable
                       style={({ pressed }) => [
                         styles.fleeCircle,
                         (pressed || engine.isFleeing) && styles.fleeCircleActive
@@ -265,48 +352,27 @@ export default function GameScreen() {
                       onPressOut={() => engine.setIsFleeing(false)}
                     >
                       <View style={[styles.fleeFill, { height: `${engine.fleeProgress}%` }]} />
-                      <View style={styles.fleeContent}>
-                        <FontAwesome5 name="running" size={24} color={engine.isFleeing ? "#ff9800" : "#eee"} />
-                        <Text style={styles.fleeText}>
-                          {engine.isFleeing ? "FLEEING" : "FLEE"}
-                        </Text>
-                      </View>
-                    </Pressable>
-                  </View>
+                      <FontAwesome5 name="running" size={16} color={engine.isFleeing ? "#ff9800" : "#555"} />
+                      <Text style={[styles.fleeText, { fontSize: 8 }]}>FLEE</Text>
+                   </Pressable>
                 )}
-
-                <View style={styles.actionContainer}>
-                  <TouchableOpacity 
-                    style={[styles.smallBtn, engine.isLocked && styles.btnDisabled]} 
-                    onPress={() => handleDodge("LEFT")}
-                    disabled={engine.isLocked}
-                  >
-                    <FontAwesome5 name="undo-alt" size={24} color="white" />
-                  </TouchableOpacity>
-
-                  <TouchableOpacity 
-                    style={[styles.mainBtn, engine.isLocked && styles.btnDisabled]} 
-                    onPress={handleAttack}
-                    disabled={engine.isLocked}
-                  >
-                    <FontAwesome5 name="hand-rock" size={48} color="white" />
-                  </TouchableOpacity>
-                </View>
               </View>
-
-              <Animated.View
-                style={[StyleSheet.absoluteFill, { backgroundColor: "white", opacity: engine.flashOp }]}
-                pointerEvents="none"
-              />
-
-              {engine.gameState === "COUNTDOWN" && (
-                <View style={styles.countdownOverlay}>
-                  <Text style={styles.countdownText}>
-                    {engine.countdown > 0 ? engine.countdown : "GO!"}
-                  </Text>
-                </View>
-              )}
             </View>
+
+            {/* Flash Effect Overlay */}
+            <Animated.View
+              style={[StyleSheet.absoluteFill, { backgroundColor: "white", opacity: engine.flashOp }]}
+              pointerEvents="none"
+            />
+
+            {/* Countdown Overlay */}
+            {engine.gameState === "COUNTDOWN" && (
+              <View style={styles.countdownOverlay}>
+                <Text style={styles.countdownText}>
+                  {engine.countdown > 0 ? engine.countdown : "GO!"}
+                </Text>
+              </View>
+            )}
           </View>
         )}
 
@@ -338,175 +404,284 @@ export default function GameScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: 20, paddingHorizontal: 20 },
-  battleZone: { flex: 1, zIndex: 1 },
+  container: { flex: 1, backgroundColor: '#000' },
+  battleZone: { flex: 1, zIndex: 1, paddingTop: 60 },
   loadingScreen: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#000" },
   loadingScreenText: { color: "#ff4444", marginTop: 20, fontWeight: "bold", letterSpacing: 2 },
-  bossBox: { marginTop: 10, alignItems: "center", position: "relative" },
-  bossTitle: {
-    color: "white",
-    fontWeight: "bold",
-    fontSize: 14,
-    marginBottom: 8,
-    letterSpacing: 2,
-  },
-  barContainer: { width: "100%", paddingHorizontal: 20 },
-  barBG: {
-    height: 8,
-    backgroundColor: "#222",
-    borderRadius: 4,
-    overflow: "hidden",
-    position: "relative",
-  },
-  fleeContainer: {
+  
+  // Cinematic Boss HUD (Top)
+  bossHUD: {
     position: 'absolute',
-    left: 10,
-    bottom: 20,
+    top: 110, // Move down to avoid top-left profile bar overlap
+    left: 20,
+    right: 20,
     alignItems: 'center',
-    zIndex: 30,
+    zIndex: 100,
   },
-  fleeCircle: {
-    width: 85,
-    height: 85,
-    borderRadius: 42.5,
-    backgroundColor: 'rgba(30,30,30,0.8)',
+  bossTitle: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "bold",
+    letterSpacing: 4,
+    marginBottom: 8,
+    textShadowColor: 'rgba(255,0,0,0.5)',
+    textShadowRadius: 10,
+  },
+  bossBarContainer: {
+    width: '100%',
+    maxWidth: 340,
+    gap: 4,
+  },
+  bossHPBarBg: {
+    height: 6,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 3,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,0,0,0.2)',
+  },
+  bossHPBarFill: {
+    height: '100%',
+    backgroundColor: '#e53935',
+  },
+  bossPoiseBarBg: {
+    height: 2,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 1,
+    overflow: 'hidden',
+    width: '60%',
+    alignSelf: 'center',
+  },
+  bossPoiseBarFill: {
+    height: '100%',
+    backgroundColor: '#ffca28',
+  },
+  bossCatchUp: {
+    position: 'absolute',
+    height: '100%',
+    backgroundColor: 'rgba(255,255,255,0.3)',
+  },
+
+  // Battle Arena
+  bossSpriteContainer: {
+    alignItems: 'center',
+    marginTop: 100, // Sync with bossHUD move
+  },
+  bossBody: {
+    width: 280,
+    height: 280,
+  },
+  playerContainer: {
+    position: 'absolute',
+    bottom: 160, // Lower the player to avoid boss overlap
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  spriteWindow: {
+    width: FRAME_WIDTH,
+    height: FRAME_HEIGHT,
+    overflow: 'hidden',
+  },
+  spritesheet: { width: 1080, height: 719, position: 'absolute' },
+
+  // Ergonomic Bottom HUD
+  bottomHUD: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    width: '100%',
+    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
+    paddingHorizontal: 20,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    borderTopWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    zIndex: 1000,
+  },
+  statsHUD: {
+    paddingVertical: 10,
+    alignItems: 'center',
+    gap: 4,
+  },
+  statBarWrapper: {
+    width: '100%',
+    maxWidth: 200,
+    height: 4,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  healthFill: { height: '100%', backgroundColor: '#ff5252' },
+  staminaFill: { height: '100%', backgroundColor: '#4caf50' },
+  tensionFill: { height: '100%', backgroundColor: '#ffca28' },
+
+  actionGrid: {
+    flexDirection: 'row',
+    width: '100%',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 5,
+  },
+  leftGroup: {
+    width: 80,
+    gap: 12,
+    alignItems: 'center',
+  },
+  centerGroup: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rightGroup: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
+  },
+
+  // Buttons
+  mainActionBtn: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255,0,0,0.15)',
     borderWidth: 2,
-    borderColor: '#444',
+    borderColor: '#ff5252',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  subActionBtn: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  smallActionBtn: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  disabledBtn: {
+    opacity: 0.2,
+  },
+  
+  // Status Icons (HUD)
+  statusRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+  },
+  statusIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  statusMiniBar: {
+    height: 3,
+    borderRadius: 1.5,
+  },
+
+  // Flee Circle
+  fleeCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(20,20,20,0.8)',
+    borderWidth: 2,
+    borderColor: '#333',
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
   },
   fleeCircleActive: {
     borderColor: '#ff9800',
-    backgroundColor: 'rgba(0,0,0,0.9)',
   },
   fleeFill: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(255,152,0,0.4)',
+    backgroundColor: 'rgba(255,152,0,0.3)',
   },
-  fleeContent: { alignItems: 'center' },
   fleeText: {
-    color: '#eee',
-    fontSize: 10,
+    color: '#aaa',
+    fontSize: 9,
     fontWeight: 'bold',
-    letterSpacing: 1,
-    marginTop: 4,
+    letterSpacing: 2,
+    marginTop: 2,
   },
-  actionContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: 20,
-    marginBottom: 5,
-  },
-  mainBtn: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(230,0,0,0.3)',
-    borderWidth: 3,
-    borderColor: '#ff4444',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#f00',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 10,
-  },
-  smallBtn: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderWidth: 2,
-    borderColor: '#888',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  btnDisabled: {
-    opacity: 0.3,
-    borderColor: '#333',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  catchUpBar: {
-    position: "absolute",
-    height: "100%",
-    backgroundColor: "#ffca28",
-  },
-  bossHP: { height: "100%", backgroundColor: "#e53935", position: "absolute" },
-  bossPoise: { height: "100%", backgroundColor: "#ffd740", position: "absolute" },
-  bossBody: { width: 300, height: 300 },
-  fullImg: { width: "100%", height: "100%" },
-  playerContainer: {
-    flex: 1,
-    justifyContent: "flex-end",
-    alignItems: "center",
-    marginBottom: 100,
-    position: "relative",
-  },
-  spriteWindow: {
-    width: FRAME_WIDTH,
-    height: FRAME_HEIGHT,
-    overflow: "hidden",
-  },
-  spritesheet: { width: 1080, height: 719, position: "absolute" },
-  hud: { position: "absolute", bottom: 30, left: 20, right: 20, zIndex: 2 },
+
+  // Overlays & Feedback
   topHud: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-    zIndex: 50,
+    position: 'absolute',
+    top: 40,
+    left: 20,
+    zIndex: 1000,
   },
-  comboText: {
-    color: "#ffea00",
-    fontSize: 18,
-    fontWeight: "bold",
-    fontStyle: "italic",
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  modal: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.9)",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 10,
-  },
-  modalText: {
-    color: "#ff1100",
-    fontSize: 40,
-    fontWeight: "bold",
-    marginBottom: 40,
-    textAlign: "center",
-    letterSpacing: 3,
-  },
-  retryBtn: {
-    padding: 15,
-    borderWidth: 1,
-    borderColor: "white",
-    backgroundColor: "rgba(255,255,255,0.05)",
-  },
-  retryText: { color: "white", fontWeight: "bold", letterSpacing: 2 },
   feedbackContainer: {
-    position: "absolute",
-    top: 50,
+    position: 'absolute', // Now relative to the sprite it belongs to
+    top: -40,
+    width: '100%',
+    alignItems: 'center',
     zIndex: 10,
-    alignItems: "center",
   },
   countdownOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.4)",
-    zIndex: 100,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    zIndex: 1000,
   },
   countdownText: {
     color: "#fff",
-    fontSize: 120,
+    fontSize: 100,
     fontWeight: "bold",
+    textShadowColor: 'rgba(255,255,255,0.5)',
+    textShadowRadius: 20,
+  },
+  modal: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.95)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalText: {
+    color: "#ff1100",
+    fontSize: 48,
+    fontWeight: "bold",
+    letterSpacing: 10,
+    textShadowColor: '#f00',
+    textShadowRadius: 20,
+    marginBottom: 40,
+  },
+  retryBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 30,
+    borderWidth: 1,
+    borderColor: "#fff",
+    borderRadius: 4,
+  },
+  retryText: { color: "#fff", fontWeight: "bold", letterSpacing: 3, fontSize: 12 },
+  fullImg: { width: "100%", height: "100%" },
+  comboText: {
+    position: 'absolute',
+    bottom: 240, // Positioned above the player and HUD
+    left: 20,
+    color: '#ffea00',
+    fontSize: 22,
+    fontWeight: 'bold',
+    fontStyle: 'italic',
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowRadius: 4,
+    zIndex: 50,
   },
 });

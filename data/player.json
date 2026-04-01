@@ -1,7 +1,7 @@
 {
   "hp": 100,
   "maxHp": 100,
-  "souls": 0,
+  "souls": 5000,
   "level": 1,
   "stats": {
     "vigor": 10,
@@ -15,12 +15,23 @@
   },
   "inventory": {
     "ownedWeapons": [
-      "broken_straight_sword"
+      "broken_straight_sword",
+      "bandit_dagger",
+      "uchigatana",
+      "broadsword",
+      "claymore",
+      "zweihander",
+      "dragon_tooth",
+      "winged_spear",
+      "caestus"
     ],
     "equippedWeaponId": "broken_straight_sword"
   },
   "progress": {
-    "unlockedEnemies": ["lizard_soldier"],
+    "unlockedEnemies": [
+      "lizard_soldier",
+      "gundyr"
+    ],
     "defeatedEnemies": []
   }
 }

@@ -52,6 +52,7 @@ export interface WeaponData {
   };
   rarity: 'common' | 'uncommon' | 'rare' | 'legendary';
   icon: string;
+  bleed: number;
   lore: string;
 }
 
@@ -77,8 +78,24 @@ export function usePlayerState() {
             ...parsed,
             // Deeply merge nested objects like progress and stats
             stats: { ...prev.stats, ...(parsed.stats || {}) },
-            progress: { ...prev.progress, ...(parsed.progress || {}) },
-            inventory: { ...prev.inventory, ...(parsed.inventory || {}) }
+            progress: {
+              ...prev.progress,
+              ...(parsed.progress || {}),
+              // Always merge with template version of unlockedEnemies
+              unlockedEnemies: Array.from(new Set([
+                ...(prev.progress.unlockedEnemies || []),
+                ...(parsed.progress?.unlockedEnemies || [])
+              ]))
+            },
+            inventory: { 
+              ...prev.inventory, 
+              ...(parsed.inventory || {}),
+              // Always ensure new weapons from player.json are included
+              ownedWeapons: Array.from(new Set([
+                ...(parsed.inventory?.ownedWeapons || []),
+                ...(playerTemplate.inventory?.ownedWeapons || [])
+              ]))
+            }
           }));
         }
       } catch (e) {
@@ -167,6 +184,19 @@ export function usePlayerState() {
     return getWeaponById(state.inventory.equippedWeaponId);
   };
 
+  const unlockAllWeapons = () => {
+    setState(prev => ({
+      ...prev,
+      inventory: {
+        ...prev.inventory,
+        ownedWeapons: Array.from(new Set([
+          ...prev.inventory.ownedWeapons,
+          "broken_straight_sword", "bandit_dagger", "uchigatana", "broadsword", "claymore", "zweihander", "dragon_tooth", "winged_spear", "caestus"
+        ]))
+      }
+    }));
+  };
+
   const resetProgress = async () => {
     setState(playerTemplate as PlayerState);
     await AsyncStorage.removeItem(SAVE_KEY);
@@ -183,6 +213,7 @@ export function usePlayerState() {
     setPlayerHp,
     equipWeapon,
     getEquippedWeapon,
+    unlockAllWeapons,
     resetProgress
   };
 }

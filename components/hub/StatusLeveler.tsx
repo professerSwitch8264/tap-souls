@@ -19,6 +19,7 @@ interface StatusLevelerProps {
       endurance: number;
     };
     levelUp: (stat: string) => void;
+    resetProgress: () => void;
   };
 }
 
@@ -70,6 +71,16 @@ export function StatusLeveler({ player }: StatusLevelerProps) {
       <View style={styles.upgradeInfo}>
          <Text style={styles.costText}>NEXT LEVEL COST: {player.level * 100} SOULS</Text>
       </View>
+
+      <TouchableOpacity 
+        style={styles.resetBtn}
+        onPress={() => {
+          player.resetProgress();
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        }}
+      >
+        <Text style={styles.resetBtnText}>RESET GAME PROGRESS</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 }
@@ -159,5 +170,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
     letterSpacing: 1,
+  },
+  resetBtn: {
+    marginTop: 40,
+    marginBottom: 60,
+    padding: 15,
+    borderWidth: 1,
+    borderColor: '#333',
+    borderRadius: 8,
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,0,0,0.05)',
+  },
+  resetBtnText: {
+    color: '#666',
+    fontSize: 10,
+    fontWeight: 'bold',
+    letterSpacing: 2,
   },
 });
